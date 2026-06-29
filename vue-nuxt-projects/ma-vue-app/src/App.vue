@@ -1,66 +1,65 @@
+<script setup>
+import TopBar from './components/TopBar.vue'
+import Sidebar from './components/Sidebar.vue'
+import WorkflowCanvas from './components/WorkflowCanvas.vue'
+
+const actions = ['Nouveau espace', 'Ajouter script', 'Sauvegarder', 'Executer']
+
+const scriptGroups = [
+  {
+    title: 'Detection APD',
+    scripts: ['acquisition.py', 'filtre.py', 'fft.py', 'cnn.py'],
+  },
+  {
+    title: 'FPGA JESD204B',
+    scripts: ['capture.py', 'analyse.py'],
+  },
+]
+
+const tabs = ['Diagramme', 'Signaux', 'Logs', 'Parametres']
+
+const workflowNodes = [
+  {
+    id: 'acquisition',
+    file: 'acquisition.py',
+    lines: ['Sortie : signal'],
+    x: 80,
+    y: 150,
+  },
+  {
+    id: 'fft',
+    file: 'fft.py',
+    lines: ['Entree : signal', 'Sortie : spectre'],
+    x: 370,
+    y: 150,
+  },
+  {
+    id: 'cnn',
+    file: 'cnn.py',
+    lines: ['Entree : spectre', 'Sortie : classes'],
+    x: 660,
+    y: 150,
+  },
+]
+
+const workflowConnections = [
+  { id: 'acquisition-to-fft', x: 250, y: 195, width: 120 },
+  { id: 'fft-to-cnn', x: 540, y: 195, width: 120 },
+]
+</script>
+
 <template>
   <div class="app-shell">
-    <header class="topbar">
-      <h1>Scientific Workflow Studio</h1>
-
-      <div class="actions">
-        <button>Nouveau espace</button>
-        <button>Ajouter script</button>
-        <button>Sauvegarder</button>
-        <button class="primary">Executer</button>
-      </div>
-    </header>
+    <TopBar title="Scientific Workflow Studio" :actions="actions" />
 
     <main class="workspace">
-      <aside class="sidebar">
-        <h2>Espaces de travail</h2>
+      <Sidebar :script-groups="scriptGroups" />
 
-        <section class="script-group">
-          <h3>Detection APD</h3>
-          <button class="script">acquisition.py</button>
-          <button class="script">filtre.py</button>
-          <button class="script">fft.py</button>
-          <button class="script">cnn.py</button>
-        </section>
-
-        <section class="script-group">
-          <h3>FPGA JESD204B</h3>
-          <button class="script">capture.py</button>
-          <button class="script">analyse.py</button>
-        </section>
-      </aside>
-
-      <section class="main-panel">
-        <nav class="tabs">
-          <button class="active">Diagramme</button>
-          <button>Signaux</button>
-          <button>Logs</button>
-          <button>Parametres</button>
-        </nav>
-
-        <section class="diagram">
-          <div class="node node-a">
-            <strong>acquisition.py</strong>
-            <span>Sortie : signal</span>
-          </div>
-
-          <div class="connection connection-1"></div>
-
-          <div class="node node-b">
-            <strong>fft.py</strong>
-            <span>Entree : signal</span>
-            <span>Sortie : spectre</span>
-          </div>
-
-          <div class="connection connection-2"></div>
-
-          <div class="node node-c">
-            <strong>cnn.py</strong>
-            <span>Entree : spectre</span>
-            <span>Sortie : classes</span>
-          </div>
-        </section>
-      </section>
+      <WorkflowCanvas
+        :tabs="tabs"
+        :nodes="workflowNodes"
+        :connections="workflowConnections"
+      />
     </main>
   </div>
 </template>
