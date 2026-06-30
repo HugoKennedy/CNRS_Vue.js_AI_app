@@ -2,12 +2,14 @@ import express from 'express'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spawn } from 'node:child_process'
 
 const app = express()
 const port = 3001
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const projectRoot = join(__dirname, '..')
 
 app.use(express.json())
 
@@ -72,6 +74,52 @@ function buildExecutionOrder(nodes, edges) {
   return orderedIds.map((id) => nodes.find((node) => node.id === id))
 }
 
+function runPythonScript(scriptFile, payload) {
+  return new Promise((resolve, reject) => {
+    const scriptPath = join(projectRoot, 'scripts', scriptFile)
+    const pythonProcess = spawn('python', [scriptPath])
+
+    let stdout = ''
+    let stderr = ''
+
+    pythonProcess.stdout.on('data', (data) => {
+      stdout += data.toString()
+    })
+
+    pythonProcess.stderr.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    pythonProcess.on('error', (error) => {
+      reject(
+        new Error(
+          `Impossible de lancer Python. Verifie que Python est installe et accessible avec la commande "python". Detail : ${error.message}`,
+        ),
+      )
+    })
+
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Erreur dans ${scriptFile} : ${stderr}`))
+        return
+      }
+
+      try {
+        resolve(JSON.parse(stdout))
+      } catch (error) {
+        reject(
+          new Error(
+            `Le script ${scriptFile} n a pas renvoye un JSON valide. Sortie recue : ${stdout}`,
+          ),
+        )
+      }
+    })
+
+    pythonProcess.stdin.write(JSON.stringify(payload))
+    pythonProcess.stdin.end()
+  })
+}
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -97,7 +145,7 @@ app.get('/api/scripts', async (req, res) => {
   }
 })
 
-app.post('/api/run', (req, res) => {
+app.post('/api/run', async (req, res) => {
   const { nodes = [], edges = [] } = req.body
 
   if (!Array.isArray(nodes) || !Array.isArray(edges)) {
@@ -107,29 +155,51 @@ app.post('/api/run', (req, res) => {
     })
   }
 
-  const orderedNodes = buildExecutionOrder(nodes, edges)
-  const executionOrder = orderedNodes.map((node) => node.data?.file || node.id)
+  try {
+    const orderedNodes = buildExecutionOrder(nodes, edges)
+    const logs = ['Workflow recu par le serveur Node.']
+    let data = {}
 
-  const logs = [
-    'Workflow recu par le serveur Node.',
-    `${nodes.length} bloc(s) detecte(s).`,
-    `${edges.length} connexion(s) detectee(s).`,
-    `Ordre d execution propose : ${executionOrder.join(' -> ')}`,
-    'Execution fictive terminee avec succes.',
-  ]
+    for (const node of orderedNodes) {
+      const scriptFile = node.data?.file
+      const parameters = node.data?.parameters || {}
 
-  res.json({
-    status: 'ok',
-    message: 'Workflow execute en mode simulation',
-    nodeCount: nodes.length,
-    edgeCount: edges.length,
-    executionOrder,
-    logs,
-    simulatedOutputs: {
-      time: [0, 1, 2, 3, 4],
-      signal: [0.0, 0.8, 1.0, 0.5, 0.1],
-    },
-  })
+      if (!scriptFile) {
+        logs.push(`Bloc ignore : ${node.id}`)
+        continue
+      }
+
+      logs.push(`Execution de ${scriptFile}...`)
+
+      data = await runPythonScript(scriptFile, {
+        nodeId: node.id,
+        file: scriptFile,
+        parameters,
+        data,
+      })
+
+      logs.push(`${scriptFile} termine.`)
+    }
+
+    const executionOrder = orderedNodes.map((node) => node.data?.file || node.id)
+
+    res.json({
+      status: 'ok',
+      message: 'Workflow execute avec scripts Python fictifs',
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      executionOrder,
+      logs,
+      simulatedOutputs: data,
+    })
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Erreur pendant l execution Python',
+      details: error.message,
+      logs: [`Erreur : ${error.message}`],
+    })
+  }
 })
 
 app.listen(port, () => {
