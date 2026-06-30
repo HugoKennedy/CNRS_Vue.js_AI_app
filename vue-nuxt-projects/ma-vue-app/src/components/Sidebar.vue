@@ -1,6 +1,9 @@
 <script setup>
 defineProps({
-  scriptGroups: Array,
+  scriptGroups: {
+    type: Array,
+    required: true,
+  },
 })
 </script>
 

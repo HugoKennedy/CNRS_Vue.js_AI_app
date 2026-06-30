@@ -1,7 +1,13 @@
 <script setup>
 defineProps({
-  title: String,
-  actions: Array,
+  title: {
+    type: String,
+    required: true,
+  },
+  actions: {
+    type: Array,
+    required: true,
+  },
 })
 </script>
 

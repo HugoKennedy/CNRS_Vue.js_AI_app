@@ -1,6 +1,6 @@
 <script setup>
-import TopBar from './components/TopBar.vue'
 import Sidebar from './components/Sidebar.vue'
+import TopBar from './components/TopBar.vue'
 import WorkflowCanvas from './components/WorkflowCanvas.vue'
 
 const actions = ['Nouveau espace', 'Ajouter script', 'Sauvegarder', 'Executer']
@@ -21,30 +21,49 @@ const tabs = ['Diagramme', 'Signaux', 'Logs', 'Parametres']
 const workflowNodes = [
   {
     id: 'acquisition',
-    file: 'acquisition.py',
-    lines: ['Sortie : signal'],
-    x: 80,
-    y: 150,
+    type: 'scriptNode',
+    position: { x: 80, y: 150 },
+    data: {
+      file: 'acquisition.py',
+      inputs: [],
+      outputs: ['signal'],
+    },
   },
   {
     id: 'fft',
-    file: 'fft.py',
-    lines: ['Entree : signal', 'Sortie : spectre'],
-    x: 370,
-    y: 150,
+    type: 'scriptNode',
+    position: { x: 370, y: 150 },
+    data: {
+      file: 'fft.py',
+      inputs: ['signal'],
+      outputs: ['spectre'],
+    },
   },
   {
     id: 'cnn',
-    file: 'cnn.py',
-    lines: ['Entree : spectre', 'Sortie : classes'],
-    x: 660,
-    y: 150,
+    type: 'scriptNode',
+    position: { x: 660, y: 150 },
+    data: {
+      file: 'cnn.py',
+      inputs: ['spectre'],
+      outputs: ['classes'],
+    },
   },
 ]
 
-const workflowConnections = [
-  { id: 'acquisition-to-fft', x: 250, y: 195, width: 120 },
-  { id: 'fft-to-cnn', x: 540, y: 195, width: 120 },
+const workflowEdges = [
+  {
+    id: 'acquisition-to-fft',
+    source: 'acquisition',
+    target: 'fft',
+    animated: true,
+  },
+  {
+    id: 'fft-to-cnn',
+    source: 'fft',
+    target: 'cnn',
+    animated: true,
+  },
 ]
 </script>
 
@@ -58,7 +77,7 @@ const workflowConnections = [
       <WorkflowCanvas
         :tabs="tabs"
         :nodes="workflowNodes"
-        :connections="workflowConnections"
+        :edges="workflowEdges"
       />
     </main>
   </div>

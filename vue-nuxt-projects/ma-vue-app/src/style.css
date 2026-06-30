@@ -1,3 +1,6 @@
+@import '@vue-flow/core/dist/style.css';
+@import '@vue-flow/core/dist/theme-default.css';
+
 :root {
   font-family: Arial, Helvetica, sans-serif;
   color: #1f2937;
@@ -131,65 +134,52 @@ button {
   position: relative;
   flex: 1;
   margin: 18px;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
   min-height: 520px;
   overflow: hidden;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
 }
 
-.node {
-  position: absolute;
+.flow {
+  width: 100%;
+  height: 100%;
+}
+
+.script-node {
+  position: relative;
   width: 170px;
-  background: white;
+  overflow: hidden;
   border: 2px solid #3b82f6;
   border-radius: 6px;
+  background: white;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
-  overflow: hidden;
 }
 
-.node strong {
-  display: block;
+.script-node-title {
+  padding: 9px 12px;
   background: #3b82f6;
   color: white;
-  padding: 9px 12px;
   font-size: 14px;
+  font-weight: 700;
 }
 
-.node span {
-  display: block;
-  padding: 5px 12px;
+.script-node-body {
+  padding: 6px 12px;
   font-size: 13px;
+  color: #111827;
 }
 
-.node-a {
-  top: 150px;
-  left: 80px;
+.script-node-body div {
+  margin: 3px 0;
 }
 
-.node-b {
-  top: 150px;
-  left: 370px;
+.vue-flow__edge-path {
+  stroke: #6b7280;
+  stroke-width: 2;
 }
 
-.node-c {
-  top: 150px;
-  left: 660px;
-}
-
-.connection {
-  position: absolute;
-  height: 3px;
-  background: #6b7280;
-  top: 195px;
-}
-
-.connection-1 {
-  left: 250px;
-  width: 120px;
-}
-
-.connection-2 {
-  left: 540px;
-  width: 120px;
+.vue-flow__edge.animated path {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.8s linear infinite;
 }

@@ -1,8 +1,19 @@
 <script setup>
+import { Handle, Position, VueFlow } from '@vue-flow/core'
+
 defineProps({
-  tabs: Array,
-  nodes: Array,
-  connections: Array,
+  tabs: {
+    type: Array,
+    required: true,
+  },
+  nodes: {
+    type: Array,
+    required: true,
+  },
+  edges: {
+    type: Array,
+    required: true,
+  },
 })
 </script>
 
@@ -19,35 +30,48 @@ defineProps({
     </nav>
 
     <section class="diagram">
-      <div
-        v-for="connection in connections"
-        :key="connection.id"
-        class="connection"
-        :style="{
-          left: `${connection.x}px`,
-          top: `${connection.y}px`,
-          width: `${connection.width}px`,
-        }"
-      ></div>
-
-      <div
-        v-for="node in nodes"
-        :key="node.id"
-        class="node"
-        :style="{
-          left: `${node.x}px`,
-          top: `${node.y}px`,
-        }"
+      <VueFlow
+        class="flow"
+        :nodes="nodes"
+        :edges="edges"
+        fit-view-on-init
       >
-        <strong>{{ node.file }}</strong>
+        <template #node-scriptNode="{ data }">
+          <div class="script-node">
+            <Handle
+              v-if="data.inputs.length > 0"
+              type="target"
+              :position="Position.Left"
+            />
 
-        <span
-          v-for="line in node.lines"
-          :key="line"
-        >
-          {{ line }}
-        </span>
-      </div>
+            <div class="script-node-title">
+              {{ data.file }}
+            </div>
+
+            <div class="script-node-body">
+              <div
+                v-for="input in data.inputs"
+                :key="`input-${input}`"
+              >
+                Entree : {{ input }}
+              </div>
+
+              <div
+                v-for="output in data.outputs"
+                :key="`output-${output}`"
+              >
+                Sortie : {{ output }}
+              </div>
+            </div>
+
+            <Handle
+              v-if="data.outputs.length > 0"
+              type="source"
+              :position="Position.Right"
+            />
+          </div>
+        </template>
+      </VueFlow>
     </section>
   </section>
 </template>
