@@ -306,3 +306,52 @@ button {
 .signal-table th {
   background: #f3f4f6;
 }
+
+.script-node.selected {
+  outline: 4px solid #f59e0b;
+  outline-offset: 4px;
+}
+
+.parameters-card {
+  max-width: 800px;
+  padding: 18px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.parameters-card h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.parameters-section {
+  margin-top: 18px;
+}
+
+.parameters-section h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.parameters-section ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.parameters-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.parameters-table th,
+.parameters-table td {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  text-align: left;
+}
+
+.parameters-table th {
+  background: #f3f4f6;
+}

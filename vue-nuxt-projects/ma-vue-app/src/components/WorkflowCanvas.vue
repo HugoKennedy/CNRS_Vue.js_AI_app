@@ -48,6 +48,12 @@ const signalPoints = computed(() => {
     })
     .join(' ')
 })
+
+const selectedNodeParameters = computed(() => {
+  const parameters = workflowStore.selectedNode?.data.parameters || {}
+
+  return Object.entries(parameters)
+})
 </script>
 
 <template>
@@ -73,9 +79,13 @@ const signalPoints = computed(() => {
         v-model:edges="workflowStore.edges"
         fit-view-on-init
         @connect="workflowStore.addConnection"
+        @node-click="workflowStore.selectNode($event.node.id)"
       >
-        <template #node-scriptNode="{ data }">
-          <div class="script-node">
+        <template #node-scriptNode="{ id, data }">
+          <div
+            class="script-node"
+            :class="{ selected: id === workflowStore.selectedNodeId }"
+          >
             <Handle
               v-if="data.inputs.length > 0"
               type="target"
@@ -238,11 +248,89 @@ const signalPoints = computed(() => {
     </section>
 
     <section
-      v-else
+      v-else-if="workflowStore.activeTab === 'Parametres'"
       class="panel-content"
     >
-      <h2>{{ workflowStore.activeTab }}</h2>
-      <p>Cette vue sera developpee plus tard.</p>
+      <h2>Parametres du bloc</h2>
+
+      <p v-if="!workflowStore.selectedNode">
+        Aucun bloc selectionne. Clique sur un bloc dans le diagramme.
+      </p>
+
+      <div
+        v-else
+        class="parameters-card"
+      >
+        <h3>{{ workflowStore.selectedNode.data.file }}</h3>
+
+        <p>
+          <strong>Label :</strong>
+          {{ workflowStore.selectedNode.data.label || 'Non defini' }}
+        </p>
+
+        <p>
+          <strong>Description :</strong>
+          {{ workflowStore.selectedNode.data.description || 'Aucune description' }}
+        </p>
+
+        <div class="parameters-section">
+          <h4>Entrees</h4>
+          <ul>
+            <li
+              v-for="input in workflowStore.selectedNode.data.inputs"
+              :key="input"
+            >
+              {{ input }}
+            </li>
+            <li v-if="workflowStore.selectedNode.data.inputs.length === 0">
+              Aucune entree
+            </li>
+          </ul>
+        </div>
+
+        <div class="parameters-section">
+          <h4>Sorties</h4>
+          <ul>
+            <li
+              v-for="output in workflowStore.selectedNode.data.outputs"
+              :key="output"
+            >
+              {{ output }}
+            </li>
+            <li v-if="workflowStore.selectedNode.data.outputs.length === 0">
+              Aucune sortie
+            </li>
+          </ul>
+        </div>
+
+        <div class="parameters-section">
+          <h4>Parametres</h4>
+
+          <table
+            v-if="selectedNodeParameters.length > 0"
+            class="parameters-table"
+          >
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Valeur</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr
+                v-for="[key, value] in selectedNodeParameters"
+                :key="key"
+              >
+                <td>{{ key }}</td>
+                <td>{{ value }}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p v-else>Aucun parametre.</p>
+        </div>
+      </div>
     </section>
   </section>
 </template>

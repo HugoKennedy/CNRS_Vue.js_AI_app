@@ -13,6 +13,12 @@ function createInitialNodes() {
         label: 'Acquisition APD',
         inputs: [],
         outputs: ['signal'],
+        description: 'Genere un signal temporel APD simule.',
+        parameters: {
+          duration_ns: 1000,
+          sampling_ns: 1,
+          amplitude: 1.0,
+        },
       },
     },
     {
@@ -24,6 +30,10 @@ function createInitialNodes() {
         label: 'Transformee FFT',
         inputs: ['signal'],
         outputs: ['spectre'],
+        description: 'Transforme un signal temporel en spectre frequentiel.',
+        parameters: {
+          window: 'hann',
+        },
       },
     },
     {
@@ -35,6 +45,10 @@ function createInitialNodes() {
         label: 'Classification CNN',
         inputs: ['spectre'],
         outputs: ['classes'],
+        description: 'Classe un spectre ou un signal avec un modele CNN fictif.',
+        parameters: {
+          model: 'mock_cnn_apd.onnx',
+        },
       },
     },
   ]
@@ -103,15 +117,27 @@ export const useWorkflowStore = defineStore('workflow', {
     edges: createInitialEdges(),
     nextNodeIndex: 1,
 
+    selectedNodeId: '',
+
     isRunning: false,
     executionResult: null,
     executionError: '',
     executionLogs: ['Aucune execution lancee pour le moment.'],
   }),
 
+  getters: {
+    selectedNode(state) {
+      return state.nodes.find((node) => node.id === state.selectedNodeId) || null
+    },
+  },
+
   actions: {
     setActiveTab(tab) {
       this.activeTab = tab
+    },
+
+    selectNode(nodeId) {
+      this.selectedNodeId = nodeId
     },
 
     async loadScripts() {
@@ -160,6 +186,8 @@ export const useWorkflowStore = defineStore('workflow', {
       }
 
       this.nodes.push(node)
+      this.selectedNodeId = nodeId
+      this.activeTab = 'Diagramme'
       this.nextNodeIndex += 1
     },
 
@@ -178,6 +206,7 @@ export const useWorkflowStore = defineStore('workflow', {
         nodes: this.nodes.map(cleanNode),
         edges: this.edges.map(cleanEdge),
         nextNodeIndex: this.nextNodeIndex,
+        selectedNodeId: this.selectedNodeId,
       }
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(workflowState))
@@ -198,6 +227,7 @@ export const useWorkflowStore = defineStore('workflow', {
         this.nodes = workflowState.nodes || createInitialNodes()
         this.edges = workflowState.edges || createInitialEdges()
         this.nextNodeIndex = workflowState.nextNodeIndex || 1
+        this.selectedNodeId = workflowState.selectedNodeId || ''
       } catch (error) {
         console.error('Erreur pendant le chargement du workflow', error)
         localStorage.removeItem(STORAGE_KEY)
@@ -208,6 +238,7 @@ export const useWorkflowStore = defineStore('workflow', {
       this.nodes = createInitialNodes()
       this.edges = createInitialEdges()
       this.nextNodeIndex = 1
+      this.selectedNodeId = ''
       this.executionResult = null
       this.executionError = ''
       this.executionLogs = ['Aucune execution lancee pour le moment.']
