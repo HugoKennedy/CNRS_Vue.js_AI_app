@@ -1,0 +1,100 @@
+[
+  {
+    "id": "acquisition",
+    "file": "acquisition.py",
+    "label": "Acquisition APD",
+    "group": "Detection APD",
+    "description": "Genere un signal temporel APD simule.",
+    "inputs": [],
+    "outputs": ["signal"],
+    "parameters": {
+      "duration_ns": 1000,
+      "sampling_ns": 1,
+      "amplitude": 1.0
+    }
+  },
+  {
+    "id": "filtre",
+    "file": "filtre.py",
+    "label": "Filtre passe-bas",
+    "group": "Detection APD",
+    "description": "Filtre un signal bruité pour reduire le bruit haute frequence.",
+    "inputs": ["signal"],
+    "outputs": ["signal_filtre"],
+    "parameters": {
+      "cutoff_mhz": 25
+    }
+  },
+  {
+    "id": "fft",
+    "file": "fft.py",
+    "label": "Transformee FFT",
+    "group": "Detection APD",
+    "description": "Transforme un signal temporel en spectre frequentiel.",
+    "inputs": ["signal"],
+    "outputs": ["spectre"],
+    "parameters": {
+      "window": "hann"
+    }
+  },
+  {
+    "id": "deconvolution",
+    "file": "deconvolution.py",
+    "label": "Deconvolution Tikhonov",
+    "group": "Detection APD",
+    "description": "Applique une deconvolution analytique fictive pour reconstruire le signal.",
+    "inputs": ["signal"],
+    "outputs": ["signal_deconvolue"],
+    "parameters": {
+      "lambda": 0.01
+    }
+  },
+  {
+    "id": "cnn",
+    "file": "cnn.py",
+    "label": "Classification CNN",
+    "group": "Detection APD",
+    "description": "Classe un spectre ou un signal avec un modele CNN fictif.",
+    "inputs": ["spectre"],
+    "outputs": ["classes"],
+    "parameters": {
+      "model": "mock_cnn_apd.onnx"
+    }
+  },
+  {
+    "id": "anomaly",
+    "file": "anomaly.py",
+    "label": "Detection anomalie",
+    "group": "Detection APD",
+    "description": "Detecte des signaux anormaux avec un autoencoder fictif.",
+    "inputs": ["signal"],
+    "outputs": ["anomaly_score"],
+    "parameters": {
+      "threshold": 0.8
+    }
+  },
+  {
+    "id": "capture",
+    "file": "capture.py",
+    "label": "Capture FPGA",
+    "group": "FPGA JESD204B",
+    "description": "Simule la capture de donnees brutes depuis une chaine FPGA.",
+    "inputs": [],
+    "outputs": ["raw_data"],
+    "parameters": {
+      "channel": 1
+    }
+  },
+  {
+    "id": "analyse",
+    "file": "analyse.py",
+    "label": "Analyse FPGA",
+    "group": "FPGA JESD204B",
+    "description": "Analyse des donnees brutes issues de la capture FPGA.",
+    "inputs": ["raw_data"],
+    "outputs": ["analysis"],
+    "parameters": {
+      "mode": "quick"
+    }
+  }
+]
