@@ -9,6 +9,8 @@ defineProps({
     required: true,
   },
 })
+
+const emit = defineEmits(['action-click'])
 </script>
 
 <template>
@@ -20,6 +22,7 @@ defineProps({
         v-for="action in actions"
         :key="action"
         :class="{ primary: action === 'Executer' }"
+        @click="emit('action-click', action)"
       >
         {{ action }}
       </button>

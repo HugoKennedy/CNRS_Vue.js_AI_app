@@ -1,20 +1,15 @@
 <script setup>
 import { Handle, Position, VueFlow } from '@vue-flow/core'
+import { useWorkflowStore } from '../stores/workflowStore'
 
 defineProps({
   tabs: {
     type: Array,
     required: true,
   },
-  nodes: {
-    type: Array,
-    required: true,
-  },
-  edges: {
-    type: Array,
-    required: true,
-  },
 })
+
+const workflowStore = useWorkflowStore()
 </script>
 
 <template>
@@ -32,9 +27,10 @@ defineProps({
     <section class="diagram">
       <VueFlow
         class="flow"
-        :nodes="nodes"
-        :edges="edges"
+        v-model:nodes="workflowStore.nodes"
+        v-model:edges="workflowStore.edges"
         fit-view-on-init
+        @connect="workflowStore.addConnection"
       >
         <template #node-scriptNode="{ data }">
           <div class="script-node">

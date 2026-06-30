@@ -1,84 +1,46 @@
 <script setup>
+import { onMounted } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import TopBar from './components/TopBar.vue'
 import WorkflowCanvas from './components/WorkflowCanvas.vue'
+import { useWorkflowStore } from './stores/workflowStore'
 
-const actions = ['Nouveau espace', 'Ajouter script', 'Sauvegarder', 'Executer']
+const workflowStore = useWorkflowStore()
 
-const scriptGroups = [
-  {
-    title: 'Detection APD',
-    scripts: ['acquisition.py', 'filtre.py', 'fft.py', 'cnn.py'],
-  },
-  {
-    title: 'FPGA JESD204B',
-    scripts: ['capture.py', 'analyse.py'],
-  },
-]
+onMounted(() => {
+  workflowStore.loadWorkflow()
+})
 
-const tabs = ['Diagramme', 'Signaux', 'Logs', 'Parametres']
+function handleActionClick(action) {
+  if (action === 'Sauvegarder') {
+    workflowStore.saveWorkflow()
+  }
 
-const workflowNodes = [
-  {
-    id: 'acquisition',
-    type: 'scriptNode',
-    position: { x: 80, y: 150 },
-    data: {
-      file: 'acquisition.py',
-      inputs: [],
-      outputs: ['signal'],
-    },
-  },
-  {
-    id: 'fft',
-    type: 'scriptNode',
-    position: { x: 370, y: 150 },
-    data: {
-      file: 'fft.py',
-      inputs: ['signal'],
-      outputs: ['spectre'],
-    },
-  },
-  {
-    id: 'cnn',
-    type: 'scriptNode',
-    position: { x: 660, y: 150 },
-    data: {
-      file: 'cnn.py',
-      inputs: ['spectre'],
-      outputs: ['classes'],
-    },
-  },
-]
+  if (action === 'Nouveau espace') {
+    workflowStore.resetWorkflow()
+  }
 
-const workflowEdges = [
-  {
-    id: 'acquisition-to-fft',
-    source: 'acquisition',
-    target: 'fft',
-    animated: true,
-  },
-  {
-    id: 'fft-to-cnn',
-    source: 'fft',
-    target: 'cnn',
-    animated: true,
-  },
-]
+  if (action === 'Ajouter script') {
+    alert('Cette action ajoutera bientot un script au diagramme')
+  }
+
+  if (action === 'Executer') {
+    alert('Cette action executera bientot le workflow')
+  }
+}
 </script>
 
 <template>
   <div class="app-shell">
-    <TopBar title="Scientific Workflow Studio" :actions="actions" />
+    <TopBar
+      title="Scientific Workflow Studio"
+      :actions="workflowStore.actions"
+      @action-click="handleActionClick"
+    />
 
     <main class="workspace">
-      <Sidebar :script-groups="scriptGroups" />
-
-      <WorkflowCanvas
-        :tabs="tabs"
-        :nodes="workflowNodes"
-        :edges="workflowEdges"
-      />
+      <Sidebar :script-groups="workflowStore.scriptGroups" />
+      <WorkflowCanvas :tabs="workflowStore.tabs" />
     </main>
   </div>
 </template>
