@@ -250,3 +250,59 @@ button {
 .result-box p {
   margin: 6px 0;
 }
+
+.signal-card {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.signal-card h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.signal-chart {
+  width: 100%;
+  max-width: 700px;
+  height: 260px;
+  display: block;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+
+.axis {
+  stroke: #9ca3af;
+  stroke-width: 2;
+}
+
+.signal-line {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 4;
+}
+
+.signal-point {
+  fill: #1d4ed8;
+}
+
+.signal-table {
+  width: 100%;
+  max-width: 700px;
+  border-collapse: collapse;
+  background: white;
+}
+
+.signal-table th,
+.signal-table td {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  text-align: left;
+}
+
+.signal-table th {
+  background: #f3f4f6;
+}

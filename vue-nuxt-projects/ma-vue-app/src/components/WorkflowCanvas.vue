@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import { Handle, Position, VueFlow } from '@vue-flow/core'
 import { useWorkflowStore } from '../stores/workflowStore'
 
@@ -10,6 +11,43 @@ defineProps({
 })
 
 const workflowStore = useWorkflowStore()
+
+const signalPoints = computed(() => {
+  const outputs = workflowStore.executionResult?.simulatedOutputs
+
+  if (!outputs || !outputs.time || !outputs.signal) {
+    return ''
+  }
+
+  const width = 600
+  const height = 220
+  const padding = 24
+
+  const times = outputs.time
+  const values = outputs.signal
+
+  const minX = Math.min(...times)
+  const maxX = Math.max(...times)
+  const minY = Math.min(...values)
+  const maxY = Math.max(...values)
+
+  return times
+    .map((time, index) => {
+      const value = values[index]
+
+      const x =
+        padding +
+        ((time - minX) / (maxX - minX || 1)) * (width - padding * 2)
+
+      const y =
+        height -
+        padding -
+        ((value - minY) / (maxY - minY || 1)) * (height - padding * 2)
+
+      return `${x},${y}`
+    })
+    .join(' ')
+})
 </script>
 
 <template>
@@ -72,6 +110,85 @@ const workflowStore = useWorkflowStore()
           </div>
         </template>
       </VueFlow>
+    </section>
+
+    <section
+      v-else-if="workflowStore.activeTab === 'Signaux'"
+      class="panel-content"
+    >
+      <h2>Signaux simules</h2>
+
+      <p v-if="!workflowStore.executionResult">
+        Aucun signal disponible. Lance d abord une execution.
+      </p>
+
+      <div v-else>
+        <div class="signal-card">
+          <h3>Signal temporel retourne par le serveur</h3>
+
+          <svg
+            class="signal-chart"
+            viewBox="0 0 600 220"
+            role="img"
+            aria-label="Courbe du signal simule"
+          >
+            <line
+              x1="24"
+              y1="196"
+              x2="576"
+              y2="196"
+              class="axis"
+            />
+            <line
+              x1="24"
+              y1="24"
+              x2="24"
+              y2="196"
+              class="axis"
+            />
+
+            <polyline
+              :points="signalPoints"
+              class="signal-line"
+            />
+
+            <circle
+              v-for="(value, index) in workflowStore.executionResult.simulatedOutputs.signal"
+              :key="index"
+              :cx="
+                24 +
+                (index /
+                  (workflowStore.executionResult.simulatedOutputs.signal.length - 1 || 1)) *
+                  552
+              "
+              :cy="196 - value * 172"
+              r="4"
+              class="signal-point"
+            />
+          </svg>
+        </div>
+
+        <table class="signal-table">
+          <thead>
+            <tr>
+              <th>Index</th>
+              <th>Temps</th>
+              <th>Signal</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr
+              v-for="(time, index) in workflowStore.executionResult.simulatedOutputs.time"
+              :key="index"
+            >
+              <td>{{ index }}</td>
+              <td>{{ time }}</td>
+              <td>{{ workflowStore.executionResult.simulatedOutputs.signal[index] }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section
