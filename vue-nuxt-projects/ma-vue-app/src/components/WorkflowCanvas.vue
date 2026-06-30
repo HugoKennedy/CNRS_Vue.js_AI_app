@@ -18,13 +18,17 @@ const workflowStore = useWorkflowStore()
       <button
         v-for="tab in tabs"
         :key="tab"
-        :class="{ active: tab === 'Diagramme' }"
+        :class="{ active: tab === workflowStore.activeTab }"
+        @click="workflowStore.setActiveTab(tab)"
       >
         {{ tab }}
       </button>
     </nav>
 
-    <section class="diagram">
+    <section
+      v-if="workflowStore.activeTab === 'Diagramme'"
+      class="diagram"
+    >
       <VueFlow
         class="flow"
         v-model:nodes="workflowStore.nodes"
@@ -68,6 +72,60 @@ const workflowStore = useWorkflowStore()
           </div>
         </template>
       </VueFlow>
+    </section>
+
+    <section
+      v-else-if="workflowStore.activeTab === 'Logs'"
+      class="panel-content"
+    >
+      <h2>Logs d execution</h2>
+
+      <p
+        v-if="workflowStore.isRunning"
+        class="status-message"
+      >
+        Execution en cours...
+      </p>
+
+      <p
+        v-if="workflowStore.executionError"
+        class="error-message"
+      >
+        {{ workflowStore.executionError }}
+      </p>
+
+      <ul class="logs-list">
+        <li
+          v-for="log in workflowStore.executionLogs"
+          :key="log"
+        >
+          {{ log }}
+        </li>
+      </ul>
+
+      <div
+        v-if="workflowStore.executionResult"
+        class="result-box"
+      >
+        <h3>Resultat serveur</h3>
+
+        <p>Status : {{ workflowStore.executionResult.status }}</p>
+        <p>Message : {{ workflowStore.executionResult.message }}</p>
+        <p>Blocs : {{ workflowStore.executionResult.nodeCount }}</p>
+        <p>Connexions : {{ workflowStore.executionResult.edgeCount }}</p>
+        <p>
+          Ordre :
+          {{ workflowStore.executionResult.executionOrder.join(' -> ') }}
+        </p>
+      </div>
+    </section>
+
+    <section
+      v-else
+      class="panel-content"
+    >
+      <h2>{{ workflowStore.activeTab }}</h2>
+      <p>Cette vue sera developpee plus tard.</p>
     </section>
   </section>
 </template>

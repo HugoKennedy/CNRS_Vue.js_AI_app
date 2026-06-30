@@ -97,14 +97,23 @@ export const useWorkflowStore = defineStore('workflow', {
     scriptsError: '',
 
     tabs: ['Diagramme', 'Signaux', 'Logs', 'Parametres'],
+    activeTab: 'Diagramme',
 
     nodes: createInitialNodes(),
     edges: createInitialEdges(),
-
     nextNodeIndex: 1,
+
+    isRunning: false,
+    executionResult: null,
+    executionError: '',
+    executionLogs: ['Aucune execution lancee pour le moment.'],
   }),
 
   actions: {
+    setActiveTab(tab) {
+      this.activeTab = tab
+    },
+
     async loadScripts() {
       this.isLoadingScripts = true
       this.scriptsError = ''
@@ -199,8 +208,48 @@ export const useWorkflowStore = defineStore('workflow', {
       this.nodes = createInitialNodes()
       this.edges = createInitialEdges()
       this.nextNodeIndex = 1
+      this.executionResult = null
+      this.executionError = ''
+      this.executionLogs = ['Aucune execution lancee pour le moment.']
+      this.activeTab = 'Diagramme'
 
       localStorage.removeItem(STORAGE_KEY)
+    },
+
+    async runWorkflow() {
+      this.isRunning = true
+      this.executionError = ''
+      this.executionLogs = ['Envoi du workflow au serveur...']
+      this.activeTab = 'Logs'
+
+      try {
+        const payload = {
+          nodes: this.nodes.map(cleanNode),
+          edges: this.edges.map(cleanEdge),
+        }
+
+        const response = await fetch('/api/run', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP ${response.status}`)
+        }
+
+        const result = await response.json()
+
+        this.executionResult = result
+        this.executionLogs = result.logs || ['Execution terminee.']
+      } catch (error) {
+        this.executionError = error.message
+        this.executionLogs = [`Erreur pendant l execution : ${error.message}`]
+      } finally {
+        this.isRunning = false
+      }
     },
   },
 })

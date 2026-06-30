@@ -27,7 +27,7 @@ function handleActionClick(action) {
   }
 
   if (action === 'Executer') {
-    alert('Cette action executera bientot le workflow')
+    workflowStore.runWorkflow()
   }
 }
 

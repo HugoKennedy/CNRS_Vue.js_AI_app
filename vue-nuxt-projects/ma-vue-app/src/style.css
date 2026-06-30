@@ -193,3 +193,60 @@ button {
   color: #b91c1c;
   font-size: 14px;
 }
+
+.panel-content {
+  flex: 1;
+  margin: 18px;
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+}
+
+.panel-content h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+}
+
+.status-message {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.error-message,
+.sidebar-error {
+  color: #b91c1c;
+  font-size: 14px;
+}
+
+.sidebar-status {
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.logs-list {
+  padding-left: 20px;
+  margin: 16px 0;
+}
+
+.logs-list li {
+  margin-bottom: 8px;
+}
+
+.result-box {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.result-box h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.result-box p {
+  margin: 6px 0;
+}
