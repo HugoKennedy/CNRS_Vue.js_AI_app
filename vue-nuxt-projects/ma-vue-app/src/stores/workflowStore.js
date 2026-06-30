@@ -71,6 +71,20 @@ function createInitialEdges() {
   ]
 }
 
+function parseParameterValue(value) {
+  if (value === '') {
+    return ''
+  }
+
+  const numberValue = Number(value)
+
+  if (!Number.isNaN(numberValue) && value.trim() !== '') {
+    return numberValue
+  }
+
+  return value
+}
+
 function cleanNode(node) {
   return {
     id: node.id,
@@ -138,6 +152,19 @@ export const useWorkflowStore = defineStore('workflow', {
 
     selectNode(nodeId) {
       this.selectedNodeId = nodeId
+    },
+
+    updateSelectedNodeParameter(parameterName, parameterValue) {
+      const node = this.selectedNode
+
+      if (!node) {
+        return
+      }
+
+      node.data.parameters = {
+        ...node.data.parameters,
+        [parameterName]: parseParameterValue(parameterValue),
+      }
     },
 
     async loadScripts() {

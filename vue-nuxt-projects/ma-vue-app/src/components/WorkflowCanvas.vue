@@ -304,7 +304,7 @@ const selectedNodeParameters = computed(() => {
         </div>
 
         <div class="parameters-section">
-          <h4>Parametres</h4>
+          <h4>Parametres modifiables</h4>
 
           <table
             v-if="selectedNodeParameters.length > 0"
@@ -323,7 +323,18 @@ const selectedNodeParameters = computed(() => {
                 :key="key"
               >
                 <td>{{ key }}</td>
-                <td>{{ value }}</td>
+                <td>
+                  <input
+                    class="parameter-input"
+                    :value="value"
+                    @input="
+                      workflowStore.updateSelectedNodeParameter(
+                        key,
+                        $event.target.value
+                      )
+                    "
+                  />
+                </td>
               </tr>
             </tbody>
           </table>
