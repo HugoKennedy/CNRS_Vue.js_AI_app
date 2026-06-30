@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 
+const STORAGE_KEY = 'scientific-workflow-state'
+
 function createInitialNodes() {
   return [
     {
@@ -8,6 +10,7 @@ function createInitialNodes() {
       position: { x: 80, y: 150 },
       data: {
         file: 'acquisition.py',
+        label: 'Acquisition APD',
         inputs: [],
         outputs: ['signal'],
       },
@@ -18,6 +21,7 @@ function createInitialNodes() {
       position: { x: 370, y: 150 },
       data: {
         file: 'fft.py',
+        label: 'Transformee FFT',
         inputs: ['signal'],
         outputs: ['spectre'],
       },
@@ -28,6 +32,7 @@ function createInitialNodes() {
       position: { x: 660, y: 150 },
       data: {
         file: 'cnn.py',
+        label: 'Classification CNN',
         inputs: ['spectre'],
         outputs: ['classes'],
       },
@@ -52,29 +57,103 @@ function createInitialEdges() {
   ]
 }
 
+function cleanNode(node) {
+  return {
+    id: node.id,
+    type: node.type,
+    position: {
+      x: node.position.x,
+      y: node.position.y,
+    },
+    data: {
+      file: node.data.file,
+      label: node.data.label,
+      description: node.data.description,
+      inputs: node.data.inputs || [],
+      outputs: node.data.outputs || [],
+      parameters: node.data.parameters || {},
+    },
+  }
+}
+
+function cleanEdge(edge) {
+  return {
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
+    animated: edge.animated || true,
+  }
+}
+
 export const useWorkflowStore = defineStore('workflow', {
   state: () => ({
     actions: ['Nouveau espace', 'Ajouter script', 'Sauvegarder', 'Executer'],
 
-    scriptGroups: [
-      {
-        title: 'Detection APD',
-        scripts: ['acquisition.py', 'filtre.py', 'fft.py', 'cnn.py'],
-      },
-      {
-        title: 'FPGA JESD204B',
-        scripts: ['capture.py', 'analyse.py'],
-      },
-    ],
+    scriptGroups: [],
+    scripts: [],
+    isLoadingScripts: false,
+    scriptsError: '',
 
     tabs: ['Diagramme', 'Signaux', 'Logs', 'Parametres'],
 
     nodes: createInitialNodes(),
-
     edges: createInitialEdges(),
+
+    nextNodeIndex: 1,
   }),
 
   actions: {
+    async loadScripts() {
+      this.isLoadingScripts = true
+      this.scriptsError = ''
+
+      try {
+        const response = await fetch('/api/scripts')
+
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP ${response.status}`)
+        }
+
+        const data = await response.json()
+
+        this.scripts = data.scripts
+        this.scriptGroups = data.groups
+      } catch (error) {
+        this.scriptsError = error.message
+        this.scripts = []
+        this.scriptGroups = []
+      } finally {
+        this.isLoadingScripts = false
+      }
+    },
+
+    addScriptNode(script) {
+      const nodeId = `${script.id}-${Date.now()}`
+      const offset = this.nextNodeIndex * 35
+
+      const node = {
+        id: nodeId,
+        type: 'scriptNode',
+        position: {
+          x: 120 + offset,
+          y: 100 + offset,
+        },
+        data: {
+          file: script.file,
+          label: script.label,
+          description: script.description,
+          inputs: script.inputs || [],
+          outputs: script.outputs || [],
+          parameters: script.parameters || {},
+        },
+      }
+
+      this.nodes.push(node)
+      this.nextNodeIndex += 1
+    },
+
     addConnection(connection) {
       const edge = {
         ...connection,
@@ -87,33 +166,41 @@ export const useWorkflowStore = defineStore('workflow', {
 
     saveWorkflow() {
       const workflowState = {
-        nodes: this.nodes,
-        edges: this.edges,
+        nodes: this.nodes.map(cleanNode),
+        edges: this.edges.map(cleanEdge),
+        nextNodeIndex: this.nextNodeIndex,
       }
 
-      localStorage.setItem('scientific-workflow-state', JSON.stringify(workflowState))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(workflowState))
 
       alert('Workflow sauvegarde')
     },
 
     loadWorkflow() {
-      const savedState = localStorage.getItem('scientific-workflow-state')
+      const savedState = localStorage.getItem(STORAGE_KEY)
 
       if (!savedState) {
         return
       }
 
-      const workflowState = JSON.parse(savedState)
+      try {
+        const workflowState = JSON.parse(savedState)
 
-      this.nodes = workflowState.nodes
-      this.edges = workflowState.edges
+        this.nodes = workflowState.nodes || createInitialNodes()
+        this.edges = workflowState.edges || createInitialEdges()
+        this.nextNodeIndex = workflowState.nextNodeIndex || 1
+      } catch (error) {
+        console.error('Erreur pendant le chargement du workflow', error)
+        localStorage.removeItem(STORAGE_KEY)
+      }
     },
 
     resetWorkflow() {
       this.nodes = createInitialNodes()
       this.edges = createInitialEdges()
+      this.nextNodeIndex = 1
 
-      localStorage.removeItem('scientific-workflow-state')
+      localStorage.removeItem(STORAGE_KEY)
     },
   },
 })

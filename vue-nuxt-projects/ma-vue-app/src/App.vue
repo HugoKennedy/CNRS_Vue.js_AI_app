@@ -7,8 +7,10 @@ import { useWorkflowStore } from './stores/workflowStore'
 
 const workflowStore = useWorkflowStore()
 
+workflowStore.loadWorkflow()
+
 onMounted(() => {
-  workflowStore.loadWorkflow()
+  workflowStore.loadScripts()
 })
 
 function handleActionClick(action) {
@@ -21,12 +23,16 @@ function handleActionClick(action) {
   }
 
   if (action === 'Ajouter script') {
-    alert('Cette action ajoutera bientot un script au diagramme')
+    workflowStore.loadScripts()
   }
 
   if (action === 'Executer') {
     alert('Cette action executera bientot le workflow')
   }
+}
+
+function handleScriptClick(script) {
+  workflowStore.addScriptNode(script)
 }
 </script>
 
@@ -39,7 +45,13 @@ function handleActionClick(action) {
     />
 
     <main class="workspace">
-      <Sidebar :script-groups="workflowStore.scriptGroups" />
+      <Sidebar
+        :script-groups="workflowStore.scriptGroups"
+        :is-loading="workflowStore.isLoadingScripts"
+        :error-message="workflowStore.scriptsError"
+        @script-click="handleScriptClick"
+      />
+
       <WorkflowCanvas :tabs="workflowStore.tabs" />
     </main>
   </div>
