@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Handle, Position, VueFlow } from '@vue-flow/core'
 import { useWorkflowStore } from '../stores/workflowStore'
 
@@ -32,6 +32,52 @@ function formatValue(value) {
 
   return value
 }
+
+function isEditableElement(element) {
+  if (!element) {
+    return false
+  }
+
+  const tagName = element.tagName?.toLowerCase()
+
+  return (
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    tagName === 'select' ||
+    element.isContentEditable
+  )
+}
+
+function handleKeyDown(event) {
+  const isDeleteKey = event.key === 'Delete' || event.key === 'Backspace'
+
+  if (!isDeleteKey) {
+    return
+  }
+
+  if (workflowStore.activeTab !== 'Diagramme') {
+    return
+  }
+
+  if (isEditableElement(document.activeElement)) {
+    return
+  }
+
+  if (!workflowStore.hasSelection) {
+    return
+  }
+
+  event.preventDefault()
+  workflowStore.deleteSelectedElement()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+})
 
 const availableOutputs = computed(() => {
   const outputs = workflowStore.executionResult?.simulatedOutputs || {}
@@ -206,6 +252,15 @@ const selectedNodeParameters = computed(() => {
       v-if="workflowStore.activeTab === 'Diagramme'"
       class="diagram"
     >
+      <button
+        v-if="workflowStore.hasSelection"
+        class="delete-floating-button"
+        type="button"
+        @click="workflowStore.deleteSelectedElement()"
+      >
+        Supprimer
+      </button>
+
       <VueFlow
         class="flow"
         v-model:nodes="workflowStore.nodes"
@@ -213,6 +268,8 @@ const selectedNodeParameters = computed(() => {
         fit-view-on-init
         @connect="workflowStore.addConnection"
         @node-click="workflowStore.selectNode($event.node.id)"
+        @edge-click="workflowStore.selectEdge($event.edge.id)"
+        @pane-click="workflowStore.clearSelection"
       >
         <template #node-scriptNode="{ id, data }">
           <div
@@ -524,6 +581,25 @@ const selectedNodeParameters = computed(() => {
 </template>
 
 <style scoped>
+.delete-floating-button {
+  position: absolute;
+  z-index: 10;
+  top: 12px;
+  left: 12px;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 12px;
+  background: #dc2626;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.14);
+}
+
+.delete-floating-button:hover {
+  background: #b91c1c;
+}
+
 .signal-toolbar {
   max-width: 700px;
   display: flex;

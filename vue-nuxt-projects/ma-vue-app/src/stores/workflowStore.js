@@ -32,6 +32,7 @@ function cleanNode(node) {
       x: node.position.x,
       y: node.position.y,
     },
+    selected: node.selected || false,
     data: {
       file: node.data.file,
       label: node.data.label,
@@ -51,6 +52,7 @@ function cleanEdge(edge) {
     sourceHandle: edge.sourceHandle,
     targetHandle: edge.targetHandle,
     animated: edge.animated || true,
+    selected: edge.selected || false,
   }
 }
 
@@ -71,6 +73,7 @@ export const useWorkflowStore = defineStore('workflow', {
     nextNodeIndex: 0,
 
     selectedNodeId: '',
+    selectedEdgeId: '',
 
     isRunning: false,
     executionResult: null,
@@ -82,6 +85,14 @@ export const useWorkflowStore = defineStore('workflow', {
     selectedNode(state) {
       return state.nodes.find((node) => node.id === state.selectedNodeId) || null
     },
+
+    selectedEdge(state) {
+      return state.edges.find((edge) => edge.id === state.selectedEdgeId) || null
+    },
+
+    hasSelection(state) {
+      return Boolean(state.selectedNodeId || state.selectedEdgeId)
+    },
   },
 
   actions: {
@@ -91,6 +102,100 @@ export const useWorkflowStore = defineStore('workflow', {
 
     selectNode(nodeId) {
       this.selectedNodeId = nodeId
+      this.selectedEdgeId = ''
+
+      this.nodes = this.nodes.map((node) => ({
+        ...node,
+        selected: node.id === nodeId,
+      }))
+
+      this.edges = this.edges.map((edge) => ({
+        ...edge,
+        selected: false,
+      }))
+    },
+
+    selectEdge(edgeId) {
+      this.selectedEdgeId = edgeId
+      this.selectedNodeId = ''
+
+      this.edges = this.edges.map((edge) => ({
+        ...edge,
+        selected: edge.id === edgeId,
+      }))
+
+      this.nodes = this.nodes.map((node) => ({
+        ...node,
+        selected: false,
+      }))
+    },
+
+    clearSelection() {
+      this.selectedNodeId = ''
+      this.selectedEdgeId = ''
+
+      this.nodes = this.nodes.map((node) => ({
+        ...node,
+        selected: false,
+      }))
+
+      this.edges = this.edges.map((edge) => ({
+        ...edge,
+        selected: false,
+      }))
+    },
+
+    deleteNode(nodeId) {
+      if (!nodeId) {
+        return
+      }
+
+      const deletedNode = this.nodes.find((node) => node.id === nodeId)
+
+      this.nodes = this.nodes.filter((node) => node.id !== nodeId)
+
+      this.edges = this.edges.filter(
+        (edge) => edge.source !== nodeId && edge.target !== nodeId,
+      )
+
+      if (this.selectedNodeId === nodeId) {
+        this.selectedNodeId = ''
+      }
+
+      this.selectedEdgeId = ''
+      this.executionResult = null
+      this.executionError = ''
+      this.executionLogs = [
+        `Bloc supprime : ${deletedNode?.data?.file || nodeId}`,
+        'Les liaisons connectees a ce bloc ont aussi ete supprimees.',
+      ]
+    },
+
+    deleteEdge(edgeId) {
+      if (!edgeId) {
+        return
+      }
+
+      this.edges = this.edges.filter((edge) => edge.id !== edgeId)
+
+      if (this.selectedEdgeId === edgeId) {
+        this.selectedEdgeId = ''
+      }
+
+      this.executionResult = null
+      this.executionError = ''
+      this.executionLogs = [`Liaison supprimee : ${edgeId}`]
+    },
+
+    deleteSelectedElement() {
+      if (this.selectedNodeId) {
+        this.deleteNode(this.selectedNodeId)
+        return
+      }
+
+      if (this.selectedEdgeId) {
+        this.deleteEdge(this.selectedEdgeId)
+      }
     },
 
     updateSelectedNodeParameter(parameterName, parameterValue) {
@@ -141,6 +246,7 @@ export const useWorkflowStore = defineStore('workflow', {
           x: 120 + offset,
           y: 100 + offset,
         },
+        selected: true,
         data: {
           file: script.file,
           label: script.label,
@@ -151,17 +257,31 @@ export const useWorkflowStore = defineStore('workflow', {
         },
       }
 
+      this.nodes = this.nodes.map((existingNode) => ({
+        ...existingNode,
+        selected: false,
+      }))
+
+      this.edges = this.edges.map((edge) => ({
+        ...edge,
+        selected: false,
+      }))
+
       this.nodes.push(node)
       this.selectedNodeId = nodeId
+      this.selectedEdgeId = ''
       this.activeTab = 'Diagramme'
       this.nextNodeIndex += 1
     },
 
     addConnection(connection) {
+      const edgeId = `${connection.source}-to-${connection.target}-${Date.now()}`
+
       const edge = {
         ...connection,
-        id: `${connection.source}-to-${connection.target}-${Date.now()}`,
+        id: edgeId,
         animated: true,
+        selected: false,
       }
 
       this.edges.push(edge)
@@ -173,6 +293,7 @@ export const useWorkflowStore = defineStore('workflow', {
         edges: this.edges.map(cleanEdge),
         nextNodeIndex: this.nextNodeIndex,
         selectedNodeId: this.selectedNodeId,
+        selectedEdgeId: this.selectedEdgeId,
       }
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(workflowState))
@@ -188,6 +309,7 @@ export const useWorkflowStore = defineStore('workflow', {
         this.edges = createInitialEdges()
         this.nextNodeIndex = 0
         this.selectedNodeId = ''
+        this.selectedEdgeId = ''
         return
       }
 
@@ -198,6 +320,7 @@ export const useWorkflowStore = defineStore('workflow', {
         this.edges = workflowState.edges || createInitialEdges()
         this.nextNodeIndex = workflowState.nextNodeIndex || 0
         this.selectedNodeId = workflowState.selectedNodeId || ''
+        this.selectedEdgeId = workflowState.selectedEdgeId || ''
       } catch (error) {
         console.error('Erreur pendant le chargement du workflow', error)
         localStorage.removeItem(STORAGE_KEY)
@@ -206,6 +329,7 @@ export const useWorkflowStore = defineStore('workflow', {
         this.edges = createInitialEdges()
         this.nextNodeIndex = 0
         this.selectedNodeId = ''
+        this.selectedEdgeId = ''
       }
     },
 
@@ -214,6 +338,7 @@ export const useWorkflowStore = defineStore('workflow', {
       this.edges = createInitialEdges()
       this.nextNodeIndex = 0
       this.selectedNodeId = ''
+      this.selectedEdgeId = ''
       this.executionResult = null
       this.executionError = ''
       this.executionLogs = ['Aucune execution lancee pour le moment.']
