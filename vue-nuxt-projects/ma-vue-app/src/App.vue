@@ -18,7 +18,7 @@ function handleActionClick(action) {
     workflowStore.saveWorkflow()
   }
 
-  if (action === 'Nouveau espace') {
+  if (action === 'Reinitialiser' || action === 'Nouveau espace') {
     workflowStore.resetWorkflow()
   }
 

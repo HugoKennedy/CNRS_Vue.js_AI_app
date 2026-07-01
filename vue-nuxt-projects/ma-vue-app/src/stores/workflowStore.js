@@ -1,74 +1,13 @@
 import { defineStore } from 'pinia'
 
-const STORAGE_KEY = 'scientific-workflow-state'
+const STORAGE_KEY = 'scientific-workflow-state-empty-start'
 
 function createInitialNodes() {
-  return [
-    {
-      id: 'acquisition',
-      type: 'scriptNode',
-      position: { x: 80, y: 150 },
-      data: {
-        file: 'acquisition.py',
-        label: 'Acquisition APD',
-        inputs: [],
-        outputs: ['signal'],
-        description: 'Genere un signal temporel APD simule.',
-        parameters: {
-          duration_ns: 1000,
-          sampling_ns: 1,
-          amplitude: 1.0,
-        },
-      },
-    },
-    {
-      id: 'fft',
-      type: 'scriptNode',
-      position: { x: 370, y: 150 },
-      data: {
-        file: 'fft.py',
-        label: 'Transformee FFT',
-        inputs: ['signal'],
-        outputs: ['spectre'],
-        description: 'Transforme un signal temporel en spectre frequentiel.',
-        parameters: {
-          window: 'hann',
-        },
-      },
-    },
-    {
-      id: 'cnn',
-      type: 'scriptNode',
-      position: { x: 660, y: 150 },
-      data: {
-        file: 'cnn.py',
-        label: 'Classification CNN',
-        inputs: ['spectre'],
-        outputs: ['classes'],
-        description: 'Classe un spectre ou un signal avec un modele CNN fictif.',
-        parameters: {
-          model: 'mock_cnn_apd.onnx',
-        },
-      },
-    },
-  ]
+  return []
 }
 
 function createInitialEdges() {
-  return [
-    {
-      id: 'acquisition-to-fft',
-      source: 'acquisition',
-      target: 'fft',
-      animated: true,
-    },
-    {
-      id: 'fft-to-cnn',
-      source: 'fft',
-      target: 'cnn',
-      animated: true,
-    },
-  ]
+  return []
 }
 
 function parseParameterValue(value) {
@@ -117,7 +56,7 @@ function cleanEdge(edge) {
 
 export const useWorkflowStore = defineStore('workflow', {
   state: () => ({
-    actions: ['Nouveau espace', 'Ajouter script', 'Sauvegarder', 'Executer'],
+    actions: ['Reinitialiser', 'Ajouter script', 'Sauvegarder', 'Executer'],
 
     scriptGroups: [],
     scripts: [],
@@ -129,7 +68,7 @@ export const useWorkflowStore = defineStore('workflow', {
 
     nodes: createInitialNodes(),
     edges: createInitialEdges(),
-    nextNodeIndex: 1,
+    nextNodeIndex: 0,
 
     selectedNodeId: '',
 
@@ -245,6 +184,10 @@ export const useWorkflowStore = defineStore('workflow', {
       const savedState = localStorage.getItem(STORAGE_KEY)
 
       if (!savedState) {
+        this.nodes = createInitialNodes()
+        this.edges = createInitialEdges()
+        this.nextNodeIndex = 0
+        this.selectedNodeId = ''
         return
       }
 
@@ -253,18 +196,23 @@ export const useWorkflowStore = defineStore('workflow', {
 
         this.nodes = workflowState.nodes || createInitialNodes()
         this.edges = workflowState.edges || createInitialEdges()
-        this.nextNodeIndex = workflowState.nextNodeIndex || 1
+        this.nextNodeIndex = workflowState.nextNodeIndex || 0
         this.selectedNodeId = workflowState.selectedNodeId || ''
       } catch (error) {
         console.error('Erreur pendant le chargement du workflow', error)
         localStorage.removeItem(STORAGE_KEY)
+
+        this.nodes = createInitialNodes()
+        this.edges = createInitialEdges()
+        this.nextNodeIndex = 0
+        this.selectedNodeId = ''
       }
     },
 
     resetWorkflow() {
       this.nodes = createInitialNodes()
       this.edges = createInitialEdges()
-      this.nextNodeIndex = 1
+      this.nextNodeIndex = 0
       this.selectedNodeId = ''
       this.executionResult = null
       this.executionError = ''
@@ -294,11 +242,13 @@ export const useWorkflowStore = defineStore('workflow', {
           body: JSON.stringify(payload),
         })
 
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP ${response.status}`)
-        }
+        const result = await response.json().catch(() => null)
 
-        const result = await response.json()
+        if (!response.ok) {
+          throw new Error(
+            result?.details || result?.message || `Erreur HTTP ${response.status}`,
+          )
+        }
 
         this.executionResult = result
         this.executionLogs = result.logs || ['Execution terminee.']

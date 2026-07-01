@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Handle, Position, VueFlow } from '@vue-flow/core'
 import { useWorkflowStore } from '../stores/workflowStore'
 
@@ -11,11 +11,94 @@ defineProps({
 })
 
 const workflowStore = useWorkflowStore()
+const selectedOutputKey = ref('')
+
+function isNumericArray(values) {
+  return (
+    Array.isArray(values) &&
+    values.length > 0 &&
+    values.every((value) => typeof value === 'number')
+  )
+}
+
+function formatValue(value) {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? value : Number(value.toFixed(4))
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+
+  return value
+}
+
+const availableOutputs = computed(() => {
+  const outputs = workflowStore.executionResult?.simulatedOutputs || {}
+
+  return Object.entries(outputs)
+    .filter(([key]) => key !== 'time' && key !== 'frequencies')
+    .map(([key, value]) => ({
+      key,
+      value,
+      type: Array.isArray(value) ? 'liste' : typeof value,
+      size: Array.isArray(value) ? value.length : 1,
+    }))
+})
+
+const currentOutputKey = computed(() => {
+  const selectedOutputExists = availableOutputs.value.some(
+    (output) => output.key === selectedOutputKey.value,
+  )
+
+  if (selectedOutputExists) {
+    return selectedOutputKey.value
+  }
+
+  return availableOutputs.value[0]?.key || ''
+})
+
+const currentOutput = computed(() =>
+  availableOutputs.value.find((output) => output.key === currentOutputKey.value),
+)
+
+const currentValues = computed(() => {
+  const value = currentOutput.value?.value
+
+  if (Array.isArray(value)) {
+    return value
+  }
+
+  if (value === undefined || value === null) {
+    return []
+  }
+
+  return [value]
+})
+
+const currentXValues = computed(() => {
+  const outputs = workflowStore.executionResult?.simulatedOutputs || {}
+
+  if (
+    currentOutputKey.value === 'spectre' &&
+    Array.isArray(outputs.frequencies) &&
+    outputs.frequencies.length === currentValues.value.length
+  ) {
+    return outputs.frequencies
+  }
+
+  if (
+    Array.isArray(outputs.time) &&
+    outputs.time.length === currentValues.value.length
+  ) {
+    return outputs.time
+  }
+
+  return currentValues.value.map((_, index) => index)
+})
 
 const signalPoints = computed(() => {
-  const outputs = workflowStore.executionResult?.simulatedOutputs
-
-  if (!outputs || !outputs.time || !outputs.signal) {
+  if (!isNumericArray(currentValues.value)) {
     return ''
   }
 
@@ -23,31 +106,81 @@ const signalPoints = computed(() => {
   const height = 220
   const padding = 24
 
-  const times = outputs.time
-  const values = outputs.signal
+  const xValues = currentXValues.value
+  const yValues = currentValues.value
 
-  const minX = Math.min(...times)
-  const maxX = Math.max(...times)
-  const minY = Math.min(...values)
-  const maxY = Math.max(...values)
+  const minX = Math.min(...xValues)
+  const maxX = Math.max(...xValues)
+  const minY = Math.min(...yValues)
+  const maxY = Math.max(...yValues)
 
-  return times
-    .map((time, index) => {
-      const value = values[index]
+  return xValues
+    .map((xValue, index) => {
+      const yValue = yValues[index]
 
       const x =
         padding +
-        ((time - minX) / (maxX - minX || 1)) * (width - padding * 2)
+        ((xValue - minX) / (maxX - minX || 1)) * (width - padding * 2)
 
       const y =
         height -
         padding -
-        ((value - minY) / (maxY - minY || 1)) * (height - padding * 2)
+        ((yValue - minY) / (maxY - minY || 1)) * (height - padding * 2)
 
       return `${x},${y}`
     })
     .join(' ')
 })
+
+const chartPoints = computed(() => {
+  if (!isNumericArray(currentValues.value)) {
+    return []
+  }
+
+  const width = 600
+  const height = 220
+  const padding = 24
+
+  const xValues = currentXValues.value
+  const yValues = currentValues.value
+
+  const minX = Math.min(...xValues)
+  const maxX = Math.max(...xValues)
+  const minY = Math.min(...yValues)
+  const maxY = Math.max(...yValues)
+
+  return yValues.map((yValue, index) => {
+    const xValue = xValues[index]
+
+    const x =
+      padding +
+      ((xValue - minX) / (maxX - minX || 1)) * (width - padding * 2)
+
+    const y =
+      height -
+      padding -
+      ((yValue - minY) / (maxY - minY || 1)) * (height - padding * 2)
+
+    return {
+      x,
+      y,
+    }
+  })
+})
+
+const tableRows = computed(() =>
+  currentValues.value.slice(0, 200).map((value, index) => ({
+    index,
+    x: currentXValues.value[index],
+    value: formatValue(value),
+  })),
+)
+
+const xColumnLabel = computed(() =>
+  currentOutputKey.value === 'spectre' ? 'Frequence' : 'Temps / index',
+)
+
+const canDrawChart = computed(() => chartPoints.value.length > 0)
 
 const selectedNodeParameters = computed(() => {
   const parameters = workflowStore.selectedNode?.data.parameters || {}
@@ -132,15 +265,43 @@ const selectedNodeParameters = computed(() => {
         Aucun signal disponible. Lance d abord une execution.
       </p>
 
+      <p v-else-if="availableOutputs.length === 0">
+        Le serveur a repondu, mais aucune sortie affichable n a ete trouvee.
+      </p>
+
       <div v-else>
+        <div class="signal-toolbar">
+          <label for="signal-output-select">Sortie a afficher</label>
+
+          <select
+            id="signal-output-select"
+            class="signal-select"
+            :value="currentOutputKey"
+            @change="selectedOutputKey = $event.target.value"
+          >
+            <option
+              v-for="output in availableOutputs"
+              :key="output.key"
+              :value="output.key"
+            >
+              {{ output.key }} - {{ output.type }} - {{ output.size }} valeur(s)
+            </option>
+          </select>
+        </div>
+
         <div class="signal-card">
-          <h3>Signal temporel retourne par le serveur</h3>
+          <h3>Sortie serveur : {{ currentOutputKey }}</h3>
+
+          <p class="signal-meta">
+            Type : {{ currentOutput?.type }} - Taille : {{ currentOutput?.size }}
+          </p>
 
           <svg
+            v-if="canDrawChart"
             class="signal-chart"
             viewBox="0 0 600 220"
+            :aria-label="`Courbe de la sortie ${currentOutputKey}`"
             role="img"
-            aria-label="Courbe du signal simule"
           >
             <line
               x1="24"
@@ -163,41 +324,52 @@ const selectedNodeParameters = computed(() => {
             />
 
             <circle
-              v-for="(value, index) in workflowStore.executionResult.simulatedOutputs.signal"
+              v-for="(point, index) in chartPoints"
               :key="index"
-              :cx="
-                24 +
-                (index /
-                  (workflowStore.executionResult.simulatedOutputs.signal.length - 1 || 1)) *
-                  552
-              "
-              :cy="196 - value * 172"
+              :cx="point.x"
+              :cy="point.y"
               r="4"
               class="signal-point"
             />
           </svg>
+
+          <p
+            v-else
+            class="no-chart-message"
+          >
+            Cette sortie n est pas une liste numerique. Elle est affichee dans le
+            tableau ci-dessous.
+          </p>
         </div>
 
         <table class="signal-table">
           <thead>
             <tr>
               <th>Index</th>
-              <th>Temps</th>
-              <th>Signal</th>
+              <th>{{ xColumnLabel }}</th>
+              <th>{{ currentOutputKey }}</th>
             </tr>
           </thead>
 
           <tbody>
             <tr
-              v-for="(time, index) in workflowStore.executionResult.simulatedOutputs.time"
-              :key="index"
+              v-for="row in tableRows"
+              :key="row.index"
             >
-              <td>{{ index }}</td>
-              <td>{{ time }}</td>
-              <td>{{ workflowStore.executionResult.simulatedOutputs.signal[index] }}</td>
+              <td>{{ row.index }}</td>
+              <td>{{ row.x }}</td>
+              <td>{{ row.value }}</td>
             </tr>
           </tbody>
         </table>
+
+        <p
+          v-if="currentValues.length > tableRows.length"
+          class="table-limit-message"
+        >
+          Affichage limite aux 200 premieres valeurs sur
+          {{ currentValues.length }}.
+        </p>
       </div>
     </section>
 
@@ -275,6 +447,7 @@ const selectedNodeParameters = computed(() => {
 
         <div class="parameters-section">
           <h4>Entrees</h4>
+
           <ul>
             <li
               v-for="input in workflowStore.selectedNode.data.inputs"
@@ -282,6 +455,7 @@ const selectedNodeParameters = computed(() => {
             >
               {{ input }}
             </li>
+
             <li v-if="workflowStore.selectedNode.data.inputs.length === 0">
               Aucune entree
             </li>
@@ -290,6 +464,7 @@ const selectedNodeParameters = computed(() => {
 
         <div class="parameters-section">
           <h4>Sorties</h4>
+
           <ul>
             <li
               v-for="output in workflowStore.selectedNode.data.outputs"
@@ -297,6 +472,7 @@ const selectedNodeParameters = computed(() => {
             >
               {{ output }}
             </li>
+
             <li v-if="workflowStore.selectedNode.data.outputs.length === 0">
               Aucune sortie
             </li>
@@ -323,6 +499,7 @@ const selectedNodeParameters = computed(() => {
                 :key="key"
               >
                 <td>{{ key }}</td>
+
                 <td>
                   <input
                     class="parameter-input"
@@ -345,3 +522,48 @@ const selectedNodeParameters = computed(() => {
     </section>
   </section>
 </template>
+
+<style scoped>
+.signal-toolbar {
+  max-width: 700px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.signal-toolbar label {
+  font-weight: 700;
+}
+
+.signal-select {
+  min-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: white;
+  font: inherit;
+}
+
+.signal-meta {
+  margin: 0 0 12px;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.no-chart-message {
+  max-width: 700px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.table-limit-message {
+  max-width: 700px;
+  color: #4b5563;
+  font-size: 14px;
+}
+</style>
