@@ -6,11 +6,13 @@
     "group": "Detection APD",
     "description": "Genere un signal temporel APD simule.",
     "inputs": [],
-    "outputs": ["signal"],
+    "outputs": [
+      "signal"
+    ],
     "parameters": {
       "duration_ns": 1000,
       "sampling_ns": 1,
-      "amplitude": 1.0
+      "amplitude": 1
     }
   },
   {
@@ -19,8 +21,12 @@
     "label": "Filtre passe-bas",
     "group": "Detection APD",
     "description": "Filtre un signal bruité pour reduire le bruit haute frequence.",
-    "inputs": ["signal"],
-    "outputs": ["signal_filtre"],
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "signal_filtre"
+    ],
     "parameters": {
       "cutoff_mhz": 25
     }
@@ -31,8 +37,12 @@
     "label": "Transformee FFT",
     "group": "Detection APD",
     "description": "Transforme un signal temporel en spectre frequentiel.",
-    "inputs": ["signal"],
-    "outputs": ["spectre"],
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "spectre"
+    ],
     "parameters": {
       "window": "hann"
     }
@@ -43,8 +53,12 @@
     "label": "Deconvolution Tikhonov",
     "group": "Detection APD",
     "description": "Applique une deconvolution analytique fictive pour reconstruire le signal.",
-    "inputs": ["signal"],
-    "outputs": ["signal_deconvolue"],
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "signal_deconvolue"
+    ],
     "parameters": {
       "lambda": 0.01
     }
@@ -55,8 +69,12 @@
     "label": "Classification CNN",
     "group": "Detection APD",
     "description": "Classe un spectre ou un signal avec un modele CNN fictif.",
-    "inputs": ["spectre"],
-    "outputs": ["classes"],
+    "inputs": [
+      "spectre"
+    ],
+    "outputs": [
+      "classes"
+    ],
     "parameters": {
       "model": "mock_cnn_apd.onnx"
     }
@@ -67,8 +85,12 @@
     "label": "Detection anomalie",
     "group": "Detection APD",
     "description": "Detecte des signaux anormaux avec un autoencoder fictif.",
-    "inputs": ["signal"],
-    "outputs": ["anomaly_score"],
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "anomaly_score"
+    ],
     "parameters": {
       "threshold": 0.8
     }
@@ -80,7 +102,9 @@
     "group": "FPGA JESD204B",
     "description": "Simule la capture de donnees brutes depuis une chaine FPGA.",
     "inputs": [],
-    "outputs": ["raw_data"],
+    "outputs": [
+      "raw_data"
+    ],
     "parameters": {
       "channel": 1
     }
@@ -91,10 +115,15 @@
     "label": "Analyse FPGA",
     "group": "FPGA JESD204B",
     "description": "Analyse des donnees brutes issues de la capture FPGA.",
-    "inputs": ["raw_data"],
-    "outputs": ["analysis"],
+    "inputs": [
+      "raw_data"
+    ],
+    "outputs": [
+      "analysis"
+    ],
     "parameters": {
       "mode": "quick"
     }
   }
+
 ]

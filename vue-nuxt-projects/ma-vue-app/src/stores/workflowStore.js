@@ -64,6 +64,8 @@ export const useWorkflowStore = defineStore('workflow', {
     scripts: [],
     isLoadingScripts: false,
     scriptsError: '',
+    importScriptStatus: '',
+    importScriptError: '',
 
     tabs: ['Diagramme', 'Signaux', 'Logs', 'Parametres'],
     activeTab: 'Diagramme',
@@ -232,6 +234,53 @@ export const useWorkflowStore = defineStore('workflow', {
         this.scriptGroups = []
       } finally {
         this.isLoadingScripts = false
+      }
+    },
+
+    async importPythonScript({ file, group }) {
+      this.importScriptStatus = ''
+      this.importScriptError = ''
+
+      if (!file) {
+        this.importScriptError = 'Aucun fichier selectionne.'
+        return false
+      }
+
+      if (!file.name.toLowerCase().endsWith('.py')) {
+        this.importScriptError = 'Le fichier doit etre un script Python .py.'
+        return false
+      }
+
+      try {
+        const content = await file.text()
+
+        const response = await fetch('/api/scripts/import', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fileName: file.name,
+            group,
+            content,
+          }),
+        })
+
+        const result = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(
+            result?.details || result?.message || `Erreur HTTP ${response.status}`,
+          )
+        }
+
+        this.importScriptStatus = result.message || 'Script ajoute.'
+        await this.loadScripts()
+
+        return true
+      } catch (error) {
+        this.importScriptError = error.message
+        return false
       }
     },
 

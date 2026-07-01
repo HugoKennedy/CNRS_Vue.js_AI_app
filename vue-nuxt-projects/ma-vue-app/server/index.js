@@ -1,6 +1,12 @@
 import express from 'express'
-import { readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import {
+  access,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from 'node:fs/promises'
+import { basename, dirname, extname, join, parse } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 
@@ -10,14 +16,28 @@ const port = 3001
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const projectRoot = join(__dirname, '..')
+const scriptsDirectory = join(projectRoot, 'scripts')
+const scriptsJsonPath = join(__dirname, 'scripts.json')
 
-app.use(express.json())
+const probeData = {
+  time: [0, 1, 2, 3],
+  signal: [0, 0.5, 1, 0.4],
+  signal_filtre: [0, 0.4, 0.7, 0.5],
+  frequencies: [0, 1, 2, 3],
+  spectre: [12, 8, 3, 1],
+  raw_data: [0.1, 0.3, 0.2, 0.5],
+}
+
+app.use(express.json({ limit: '2mb' }))
 
 async function readScripts() {
-  const scriptsPath = join(__dirname, 'scripts.json')
-  const scriptsContent = await readFile(scriptsPath, 'utf8')
+  const scriptsContent = await readFile(scriptsJsonPath, 'utf8')
 
   return JSON.parse(scriptsContent)
+}
+
+async function writeScripts(scripts) {
+  await writeFile(scriptsJsonPath, JSON.stringify(scripts, null, 2), 'utf8')
 }
 
 function groupScriptsByWorkspace(scripts) {
@@ -76,7 +96,7 @@ function buildExecutionOrder(nodes, edges) {
 
 function runPythonScript(scriptFile, payload) {
   return new Promise((resolve, reject) => {
-    const scriptPath = join(projectRoot, 'scripts', scriptFile)
+    const scriptPath = join(scriptsDirectory, scriptFile)
     const pythonProcess = spawn('python', [scriptPath])
 
     let stdout = ''
@@ -120,6 +140,195 @@ function runPythonScript(scriptFile, payload) {
   })
 }
 
+function validatePythonScriptContract(scriptPath, scriptFile) {
+  return new Promise((resolve, reject) => {
+    const pythonProcess = spawn('python', [scriptPath])
+
+    let stdout = ''
+    let stderr = ''
+    let isSettled = false
+
+    const timeout = setTimeout(() => {
+      if (isSettled) {
+        return
+      }
+
+      isSettled = true
+      pythonProcess.kill()
+
+      reject(
+        new Error(
+          `Le script ${scriptFile} ne repond pas assez vite au test JSON.`,
+        ),
+      )
+    }, 4000)
+
+    pythonProcess.stdout.on('data', (data) => {
+      stdout += data.toString()
+    })
+
+    pythonProcess.stderr.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    pythonProcess.on('error', (error) => {
+      if (isSettled) {
+        return
+      }
+
+      isSettled = true
+      clearTimeout(timeout)
+
+      reject(
+        new Error(
+          `Impossible de lancer Python. Verifie que Python est installe et accessible avec la commande "python". Detail : ${error.message}`,
+        ),
+      )
+    })
+
+    pythonProcess.on('close', (code) => {
+      if (isSettled) {
+        return
+      }
+
+      isSettled = true
+      clearTimeout(timeout)
+
+      if (code !== 0) {
+        reject(
+          new Error(
+            `Le script ${scriptFile} a echoue pendant le test JSON. Detail : ${stderr}`,
+          ),
+        )
+        return
+      }
+
+      try {
+        const output = JSON.parse(stdout)
+
+        if (!output || typeof output !== 'object' || Array.isArray(output)) {
+          reject(
+            new Error(
+              `Le script ${scriptFile} doit renvoyer un objet JSON, pas une liste ou une valeur simple.`,
+            ),
+          )
+          return
+        }
+
+        resolve(output)
+      } catch (error) {
+        reject(
+          new Error(
+            `Le script ${scriptFile} doit afficher un JSON valide avec print(json.dumps(...)). Sortie recue : ${stdout}`,
+          ),
+        )
+      }
+    })
+
+    pythonProcess.stdin.write(
+      JSON.stringify({
+        nodeId: 'validation',
+        file: scriptFile,
+        parameters: {},
+        data: probeData,
+      }),
+    )
+
+    pythonProcess.stdin.end()
+  })
+}
+
+function sanitizePythonFileName(fileName) {
+  const safeName = basename(fileName).replace(/\s+/g, '_')
+
+  if (extname(safeName).toLowerCase() !== '.py') {
+    throw new Error('Le fichier doit avoir l extension .py')
+  }
+
+  if (!/^[a-zA-Z0-9._-]+\.py$/.test(safeName)) {
+    throw new Error(
+      'Le nom du fichier ne doit contenir que lettres, chiffres, points, tirets ou underscores.',
+    )
+  }
+
+  return safeName
+}
+
+function createScriptId(fileName, existingScripts) {
+  const baseId = parse(fileName)
+    .name.toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '_')
+
+  let candidateId = baseId
+  let index = 2
+
+  while (existingScripts.some((script) => script.id === candidateId)) {
+    candidateId = `${baseId}_${index}`
+    index += 1
+  }
+
+  return candidateId
+}
+
+function inferOutputs(output) {
+  const ignoredKeys = ['time', 'frequencies']
+  const probeKeys = Object.keys(probeData)
+
+  const newKeys = Object.keys(output).filter(
+    (key) => !probeKeys.includes(key) && !ignoredKeys.includes(key),
+  )
+
+  if (newKeys.length > 0) {
+    return newKeys
+  }
+
+  return Object.keys(output).filter((key) => !ignoredKeys.includes(key))
+}
+
+function inferInputs(group, outputs) {
+  if (group === 'FPGA JESD204B') {
+    if (outputs.includes('raw_data')) {
+      return []
+    }
+
+    return ['raw_data']
+  }
+
+  if (outputs.includes('spectre')) {
+    return ['signal']
+  }
+
+  if (outputs.includes('classes') || outputs.includes('classification_score')) {
+    return ['spectre']
+  }
+
+  if (outputs.some((output) => output.includes('anomaly'))) {
+    return ['signal']
+  }
+
+  if (outputs.length === 1 && outputs[0] === 'signal') {
+    return []
+  }
+
+  if (outputs.some((output) => output.startsWith('signal'))) {
+    return ['signal']
+  }
+
+  return ['signal']
+}
+
+function normalizeGroup(group) {
+  if (group === 'apd' || group === 'Detection APD') {
+    return 'Detection APD'
+  }
+
+  if (group === 'fpga' || group === 'FPGA JESD204B') {
+    return 'FPGA JESD204B'
+  }
+
+  throw new Error('Categorie inconnue. Choisir Detection APD ou FPGA JESD204B.')
+}
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -140,6 +349,88 @@ app.get('/api/scripts', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: 'Unable to read scripts list',
+      details: error.message,
+    })
+  }
+})
+
+app.post('/api/scripts/import', async (req, res) => {
+  let tempScriptPath = ''
+
+  try {
+    const { fileName, group, content } = req.body
+
+    if (!fileName || !group || !content) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'fileName, group et content sont obligatoires.',
+      })
+    }
+
+    const safeFileName = sanitizePythonFileName(fileName)
+    const normalizedGroup = normalizeGroup(group)
+    const finalScriptPath = join(scriptsDirectory, safeFileName)
+
+    try {
+      await access(finalScriptPath)
+
+      return res.status(409).json({
+        status: 'error',
+        message: `Le fichier ${safeFileName} existe deja dans le dossier scripts.`,
+      })
+    } catch (error) {
+      // Le fichier n existe pas encore, on peut continuer.
+    }
+
+    tempScriptPath = join(
+      scriptsDirectory,
+      `.__candidate_${Date.now()}_${safeFileName}`,
+    )
+
+    await writeFile(tempScriptPath, content, 'utf8')
+
+    const validationOutput = await validatePythonScriptContract(
+      tempScriptPath,
+      safeFileName,
+    )
+
+    const scripts = await readScripts()
+    const scriptId = createScriptId(safeFileName, scripts)
+    const outputs = inferOutputs(validationOutput)
+    const inputs = inferInputs(normalizedGroup, outputs)
+
+    const newScript = {
+      id: scriptId,
+      file: safeFileName,
+      label: parse(safeFileName).name,
+      group: normalizedGroup,
+      description: 'Script Python ajoute depuis l interface.',
+      inputs,
+      outputs,
+      parameters: {},
+    }
+
+    await rename(tempScriptPath, finalScriptPath)
+
+    scripts.push(newScript)
+    await writeScripts(scripts)
+
+    res.json({
+      status: 'ok',
+      message: `Script ${safeFileName} ajoute avec succes.`,
+      script: newScript,
+      validation: {
+        outputKeys: Object.keys(validationOutput),
+      },
+    })
+  } catch (error) {
+    if (tempScriptPath) {
+      await unlink(tempScriptPath).catch(() => {})
+    }
+
+    res.status(400).json({
+      status: 'error',
+      message: 'Impossible d ajouter le script.',
       details: error.message,
     })
   }
