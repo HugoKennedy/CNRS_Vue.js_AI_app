@@ -4,7 +4,7 @@
     "file": "rc_entree.py",
     "label": "Entree RC",
     "group": "RCpb",
-    "description": "Genere un signal sinusoidal bruite pour tester un filtre RC passe-bas.",
+    "description": "Genere une tension d entree bruitee pour tester un filtre RC passe-bas.",
     "inputs": [
       "signal"
     ],
@@ -38,26 +38,11 @@
     }
   },
   {
-    "id": "rc_sortie",
-    "file": "rc_sortie.py",
-    "label": "Sortie RC",
-    "group": "RCpb",
-    "description": "Prepare les grandeurs finales du filtre RC pour affichage dans ThinkML.",
-    "inputs": [
-      "signal_apres_resistance"
-    ],
-    "outputs": [
-      "signal_sortie",
-      "gain_approx"
-    ],
-    "parameters": {}
-  },
-  {
     "id": "rc_condensateur",
     "file": "rc_condensateur.py",
     "label": "Condensateur RC",
     "group": "RCpb",
-    "description": "Simule la charge et la decharge du condensateur. La sortie du filtre est la tension aux bornes du condensateur.",
+    "description": "Simule la tension aux bornes du condensateur, c est-a-dire la sortie du filtre RC.",
     "inputs": [
       "signal_apres_resistance"
     ],
@@ -73,5 +58,20 @@
     "parameters": {
       "capacite_farads": 0.000001
     }
+  },
+  {
+    "id": "rc_sortie",
+    "file": "rc_sortie.py",
+    "label": "Sortie RC",
+    "group": "RCpb",
+    "description": "Prepare les grandeurs finales du filtre RC pour affichage dans ThinkML.",
+    "inputs": [
+      "signal_apres_resistance"
+    ],
+    "outputs": [
+      "signal_sortie",
+      "gain_approx"
+    ],
+    "parameters": {}
   }
 ]

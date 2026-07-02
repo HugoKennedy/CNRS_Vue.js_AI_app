@@ -45,9 +45,31 @@ function isNumericArray(values) {
   )
 }
 
+function isInternalOutputKey(key) {
+  return key === 'time' || key === 'frequencies' || key.startsWith('__thinkml_')
+}
+
+function formatNumber(value) {
+  if (typeof value !== 'number') {
+    return value
+  }
+
+  if (value === 0) {
+    return '0'
+  }
+
+  const absoluteValue = Math.abs(value)
+
+  if (absoluteValue >= 10000 || absoluteValue < 0.001) {
+    return value.toExponential(2)
+  }
+
+  return Number(value.toFixed(4)).toString()
+}
+
 function formatValue(value) {
   if (typeof value === 'number') {
-    return Number.isInteger(value) ? value : Number(value.toFixed(4))
+    return formatNumber(value)
   }
 
   if (typeof value === 'object') {
@@ -55,6 +77,36 @@ function formatValue(value) {
   }
 
   return value
+}
+
+function formatUnit(unit) {
+  if (!unit) {
+    return ''
+  }
+
+  return ` ${unit}`
+}
+
+function getOutputOptionLabel(output) {
+  const metadata = output.metadata || {}
+  const unit = metadata.unit || ''
+  const xLabel = metadata.xLabel || 'Temps / index'
+  const xUnit = metadata.xUnit || ''
+
+  if (output.kind === 'courbe') {
+    const xPart = xUnit ? `${xLabel} (${xUnit})` : xLabel
+    const yPart = unit ? `${unit}` : 'sans unite'
+
+    return `${output.label} | ${output.size} points | ${yPart} en fonction de ${xPart}`
+  }
+
+  if (output.kind === 'valeur') {
+    const value = Array.isArray(output.value) ? output.value[0] : output.value
+
+    return `${output.label} = ${formatValue(value)}${formatUnit(unit)}`
+  }
+
+  return `${output.label} | ${output.size} valeur(s)`
 }
 
 function isEditableElement(element) {
@@ -103,22 +155,64 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
 })
 
-const availableOutputs = computed(() => {
-  const outputs = workflowStore.executionResult?.simulatedOutputs || {}
+const rawOutputs = computed(() => workflowStore.executionResult?.simulatedOutputs || {})
 
-  return Object.entries(outputs)
-    .filter(([key]) => key !== 'time' && key !== 'frequencies')
-    .map(([key, value]) => ({
-      key,
-      value,
-      type: Array.isArray(value) ? 'liste' : typeof value,
-      size: Array.isArray(value) ? value.length : 1,
-    }))
+const outputMetadata = computed(() => rawOutputs.value.__thinkml_outputs || {})
+
+const availableOutputs = computed(() => {
+  return Object.entries(rawOutputs.value)
+    .filter(([key]) => !isInternalOutputKey(key))
+    .map(([key, value]) => {
+      const metadata = outputMetadata.value[key] || {}
+      const isList = Array.isArray(value)
+      const isNumericList = isNumericArray(value)
+
+      let kind = typeof value
+
+      if (isList && value.length > 1 && isNumericList) {
+        kind = 'courbe'
+      } else if (isList && value.length <= 1) {
+        kind = 'valeur'
+      } else if (isList) {
+        kind = 'liste'
+      } else if (typeof value === 'number') {
+        kind = 'valeur'
+      }
+
+      const output = {
+        key,
+        value,
+        metadata,
+        label: metadata.label || key,
+        unit: metadata.unit || '',
+        kind,
+        size: isList ? value.length : 1,
+      }
+
+      return {
+        ...output,
+        optionLabel: getOutputOptionLabel(output),
+      }
+    })
 })
+
+const curveOutputs = computed(() =>
+  availableOutputs.value.filter((output) => output.kind === 'courbe'),
+)
+
+const scalarOutputs = computed(() =>
+  availableOutputs.value.filter((output) => output.kind === 'valeur'),
+)
+
+const listOutputs = computed(() =>
+  availableOutputs.value.filter(
+    (output) => output.kind !== 'courbe' && output.kind !== 'valeur',
+  ),
+)
 
 const currentOutputKey = computed(() => {
   const selectedOutputExists = availableOutputs.value.some(
-    (output) => output.key === selectedOutputKey.value
+    (output) => output.key === selectedOutputKey.value,
   )
 
   if (selectedOutputExists) {
@@ -129,7 +223,11 @@ const currentOutputKey = computed(() => {
 })
 
 const currentOutput = computed(() =>
-  availableOutputs.value.find((output) => output.key === currentOutputKey.value)
+  availableOutputs.value.find((output) => output.key === currentOutputKey.value),
+)
+
+const currentMetadata = computed(
+  () => outputMetadata.value[currentOutputKey.value] || {},
 )
 
 const currentValues = computed(() => {
@@ -147,35 +245,45 @@ const currentValues = computed(() => {
 })
 
 const currentXValues = computed(() => {
-  const outputs = workflowStore.executionResult?.simulatedOutputs || {}
+  const metadata = currentMetadata.value
+  const xKey = metadata.xKey
 
   if (
-    currentOutputKey.value === 'spectre' &&
-    Array.isArray(outputs.frequencies) &&
-    outputs.frequencies.length === currentValues.value.length
+    xKey &&
+    Array.isArray(rawOutputs.value[xKey]) &&
+    rawOutputs.value[xKey].length === currentValues.value.length
   ) {
-    return outputs.frequencies
+    return rawOutputs.value[xKey]
   }
 
   if (
-    Array.isArray(outputs.time) &&
-    outputs.time.length === currentValues.value.length
+    currentOutputKey.value === 'spectre' &&
+    Array.isArray(rawOutputs.value.frequencies) &&
+    rawOutputs.value.frequencies.length === currentValues.value.length
   ) {
-    return outputs.time
+    return rawOutputs.value.frequencies
+  }
+
+  if (
+    Array.isArray(rawOutputs.value.time) &&
+    rawOutputs.value.time.length === currentValues.value.length
+  ) {
+    return rawOutputs.value.time
   }
 
   return currentValues.value.map((_, index) => index)
 })
 
-const signalPoints = computed(() => {
-  if (!isNumericArray(currentValues.value)) {
-    return ''
-  }
+const chartConfig = {
+  width: 720,
+  height: 320,
+  left: 72,
+  right: 24,
+  top: 28,
+  bottom: 64,
+}
 
-  const width = 600
-  const height = 220
-  const padding = 24
-
+const chartBounds = computed(() => {
   const xValues = currentXValues.value
   const yValues = currentValues.value
 
@@ -184,58 +292,134 @@ const signalPoints = computed(() => {
   const minY = Math.min(...yValues)
   const maxY = Math.max(...yValues)
 
-  return xValues
-    .map((xValue, index) => {
-      const yValue = yValues[index]
+  const yPadding = (maxY - minY || 1) * 0.08
 
-      const x =
-        padding +
-        ((xValue - minX) / (maxX - minX || 1)) * (width - padding * 2)
-
-      const y =
-        height -
-        padding -
-        ((yValue - minY) / (maxY - minY || 1)) * (height - padding * 2)
-
-      return `${x},${y}`
-    })
-    .join(' ')
+  return {
+    minX,
+    maxX,
+    minY: minY - yPadding,
+    maxY: maxY + yPadding,
+  }
 })
 
+function getChartX(xValue) {
+  const bounds = chartBounds.value
+  const drawingWidth = chartConfig.width - chartConfig.left - chartConfig.right
+
+  return (
+    chartConfig.left +
+    ((xValue - bounds.minX) / (bounds.maxX - bounds.minX || 1)) * drawingWidth
+  )
+}
+
+function getChartY(yValue) {
+  const bounds = chartBounds.value
+  const drawingHeight = chartConfig.height - chartConfig.top - chartConfig.bottom
+
+  return (
+    chartConfig.height -
+    chartConfig.bottom -
+    ((yValue - bounds.minY) / (bounds.maxY - bounds.minY || 1)) * drawingHeight
+  )
+}
+
+const canDrawChart = computed(
+  () => isNumericArray(currentValues.value) && currentValues.value.length > 1,
+)
+
 const chartPoints = computed(() => {
-  if (!isNumericArray(currentValues.value)) {
+  if (!canDrawChart.value) {
     return []
   }
 
-  const width = 600
-  const height = 220
-  const padding = 24
+  return currentValues.value.map((yValue, index) => ({
+    x: getChartX(currentXValues.value[index]),
+    y: getChartY(yValue),
+  }))
+})
 
-  const xValues = currentXValues.value
-  const yValues = currentValues.value
+const signalPoints = computed(() =>
+  chartPoints.value.map((point) => `${point.x},${point.y}`).join(' '),
+)
 
-  const minX = Math.min(...xValues)
-  const maxX = Math.max(...xValues)
-  const minY = Math.min(...yValues)
-  const maxY = Math.max(...yValues)
+function buildTicks(minValue, maxValue, count = 5) {
+  if (count <= 1) {
+    return [minValue]
+  }
 
-  return yValues.map((yValue, index) => {
-    const xValue = xValues[index]
+  const ticks = []
 
-    const x =
-      padding +
-      ((xValue - minX) / (maxX - minX || 1)) * (width - padding * 2)
+  for (let index = 0; index < count; index++) {
+    const ratio = index / (count - 1)
+    ticks.push(minValue + (maxValue - minValue) * ratio)
+  }
 
-    const y =
-      height -
-      padding -
-      ((yValue - minY) / (maxY - minY || 1)) * (height - padding * 2)
+  return ticks
+}
 
-    return {
-      x,
-      y,
-    }
-  })
+const xTicks = computed(() => {
+  if (!canDrawChart.value) {
+    return []
+  }
+
+  const bounds = chartBounds.value
+
+  return buildTicks(bounds.minX, bounds.maxX).map((value) => ({
+    value,
+    x: getChartX(value),
+    label: formatNumber(value),
+  }))
+})
+
+const yTicks = computed(() => {
+  if (!canDrawChart.value) {
+    return []
+  }
+
+  const bounds = chartBounds.value
+
+  return buildTicks(bounds.minY, bounds.maxY).map((value) => ({
+    value,
+    y: getChartY(value),
+    label: formatNumber(value),
+  }))
+})
+
+const xAxisLabel = computed(() => currentMetadata.value.xLabel || 'Temps / index')
+const xAxisUnit = computed(() => currentMetadata.value.xUnit || '')
+const yAxisLabel = computed(() => currentMetadata.value.label || currentOutputKey.value)
+const yAxisUnit = computed(() => currentMetadata.value.unit || '')
+
+const fullXAxisLabel = computed(() => {
+  if (!xAxisUnit.value) {
+    return xAxisLabel.value
+  }
+
+  return `${xAxisLabel.value} (${xAxisUnit.value})`
+})
+
+const fullYAxisLabel = computed(() => {
+  if (!yAxisUnit.value) {
+    return yAxisLabel.value
+  }
+
+  return `${yAxisLabel.value} (${yAxisUnit.value})`
+})
+
+const isScalarOutput = computed(() => {
+  if (!currentOutput.value) {
+    return false
+  }
+
+  return !Array.isArray(currentOutput.value.value) || currentValues.value.length <= 1
+})
+
+const scalarDisplayValue = computed(() => {
+  if (!currentValues.value.length) {
+    return 'Aucune valeur'
+  }
+
+  return formatValue(currentValues.value[0])
 })
 
 const tableRows = computed(() =>
@@ -243,14 +427,8 @@ const tableRows = computed(() =>
     index,
     x: currentXValues.value[index],
     value: formatValue(value),
-  }))
+  })),
 )
-
-const xColumnLabel = computed(() =>
-  currentOutputKey.value === 'spectre' ? 'Frequence' : 'Temps / index'
-)
-
-const canDrawChart = computed(() => chartPoints.value.length > 0)
 
 const selectedNodeParameters = computed(() => {
   const parameters = workflowStore.selectedNode?.data.parameters || {}
@@ -362,44 +540,137 @@ const selectedNodeParameters = computed(() => {
             :value="currentOutputKey"
             @change="selectedOutputKey = $event.target.value"
           >
-            <option
-              v-for="output in availableOutputs"
-              :key="output.key"
-              :value="output.key"
+            <optgroup
+              v-if="curveOutputs.length > 0"
+              label="Courbes"
             >
-              {{ output.key }} - {{ output.type }} - {{ output.size }} valeur(s)
-            </option>
+              <option
+                v-for="output in curveOutputs"
+                :key="output.key"
+                :value="output.key"
+              >
+                {{ output.optionLabel }}
+              </option>
+            </optgroup>
+
+            <optgroup
+              v-if="scalarOutputs.length > 0"
+              label="Valeurs"
+            >
+              <option
+                v-for="output in scalarOutputs"
+                :key="output.key"
+                :value="output.key"
+              >
+                {{ output.optionLabel }}
+              </option>
+            </optgroup>
+
+            <optgroup
+              v-if="listOutputs.length > 0"
+              label="Autres sorties"
+            >
+              <option
+                v-for="output in listOutputs"
+                :key="output.key"
+                :value="output.key"
+              >
+                {{ output.optionLabel }}
+              </option>
+            </optgroup>
           </select>
         </div>
 
         <div class="signal-card">
-          <h3>Sortie serveur : {{ currentOutputKey }}</h3>
+          <div class="signal-card-header">
+            <div>
+              <h3>{{ yAxisLabel }}</h3>
 
-          <p class="signal-meta">
-            Type : {{ currentOutput?.type }} - Taille : {{ currentOutput?.size }}
-          </p>
+              <p class="signal-meta">
+                Cle JSON : {{ currentOutputKey }}
+                <span v-if="yAxisUnit"> - Unite : {{ yAxisUnit }}</span>
+              </p>
+            </div>
+          </div>
+
+          <div
+            v-if="isScalarOutput"
+            class="scalar-value-card"
+          >
+            <span class="scalar-label">{{ yAxisLabel }}</span>
+
+            <strong class="scalar-value">
+              {{ scalarDisplayValue }}
+              <span v-if="yAxisUnit">{{ yAxisUnit }}</span>
+            </strong>
+          </div>
 
           <svg
-            v-if="canDrawChart"
+            v-else-if="canDrawChart"
             class="signal-chart"
-            viewBox="0 0 600 220"
+            viewBox="0 0 720 320"
             :aria-label="`Courbe de la sortie ${currentOutputKey}`"
             role="img"
           >
             <line
-              x1="24"
-              y1="196"
-              x2="576"
-              y2="196"
+              :x1="chartConfig.left"
+              :y1="chartConfig.height - chartConfig.bottom"
+              :x2="chartConfig.width - chartConfig.right"
+              :y2="chartConfig.height - chartConfig.bottom"
               class="axis"
             />
+
             <line
-              x1="24"
-              y1="24"
-              x2="24"
-              y2="196"
+              :x1="chartConfig.left"
+              :y1="chartConfig.top"
+              :x2="chartConfig.left"
+              :y2="chartConfig.height - chartConfig.bottom"
               class="axis"
             />
+
+            <g
+              v-for="tick in xTicks"
+              :key="`x-${tick.label}`"
+            >
+              <line
+                :x1="tick.x"
+                :y1="chartConfig.top"
+                :x2="tick.x"
+                :y2="chartConfig.height - chartConfig.bottom"
+                class="grid-line"
+              />
+
+              <text
+                :x="tick.x"
+                :y="chartConfig.height - chartConfig.bottom + 24"
+                class="axis-tick"
+                text-anchor="middle"
+              >
+                {{ tick.label }}
+              </text>
+            </g>
+
+            <g
+              v-for="tick in yTicks"
+              :key="`y-${tick.label}`"
+            >
+              <line
+                :x1="chartConfig.left"
+                :y1="tick.y"
+                :x2="chartConfig.width - chartConfig.right"
+                :y2="tick.y"
+                class="grid-line"
+              />
+
+              <text
+                :x="chartConfig.left - 10"
+                :y="tick.y + 4"
+                class="axis-tick"
+                text-anchor="end"
+              >
+                {{ tick.label }}
+              </text>
+            </g>
 
             <polyline
               :points="signalPoints"
@@ -411,9 +682,28 @@ const selectedNodeParameters = computed(() => {
               :key="index"
               :cx="point.x"
               :cy="point.y"
-              r="4"
+              r="3"
               class="signal-point"
             />
+
+            <text
+              :x="chartConfig.width / 2"
+              :y="chartConfig.height - 16"
+              class="axis-label"
+              text-anchor="middle"
+            >
+              {{ fullXAxisLabel }}
+            </text>
+
+            <text
+              :x="-chartConfig.height / 2"
+              y="18"
+              class="axis-label"
+              text-anchor="middle"
+              transform="rotate(-90)"
+            >
+              {{ fullYAxisLabel }}
+            </text>
           </svg>
 
           <p
@@ -429,8 +719,8 @@ const selectedNodeParameters = computed(() => {
           <thead>
             <tr>
               <th>Index</th>
-              <th>{{ xColumnLabel }}</th>
-              <th>{{ currentOutputKey }}</th>
+              <th>{{ fullXAxisLabel }}</th>
+              <th>{{ fullYAxisLabel }}</th>
             </tr>
           </thead>
 
@@ -627,7 +917,7 @@ const selectedNodeParameters = computed(() => {
 }
 
 .signal-toolbar {
-  max-width: 700px;
+  max-width: 860px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -639,10 +929,128 @@ const selectedNodeParameters = computed(() => {
 }
 
 .signal-select {
-  min-width: 280px;
+  min-width: 560px;
+  max-width: 100%;
   padding: 8px 10px;
   border: 1px solid #cbd5e1;
   border-radius: 5px;
   background: white;
+}
+
+.signal-card {
+  max-width: 900px;
+}
+
+.signal-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.signal-card h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.signal-meta {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+}
+
+.scalar-value-card {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 260px;
+  padding: 18px 20px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: white;
+}
+
+.scalar-label {
+  color: #475569;
+  font-size: 14px;
+}
+
+.scalar-value {
+  color: #1d4ed8;
+  font-size: 28px;
+}
+
+.signal-chart {
+  width: 100%;
+  max-width: 760px;
+  height: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+}
+
+.axis {
+  stroke: #64748b;
+  stroke-width: 2;
+}
+
+.grid-line {
+  stroke: #e5e7eb;
+  stroke-width: 1;
+}
+
+.axis-tick {
+  fill: #475569;
+  font-size: 12px;
+}
+
+.axis-label {
+  fill: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.signal-line {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 3;
+}
+
+.signal-point {
+  fill: #1d4ed8;
+}
+
+.no-chart-message {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.signal-table {
+  max-width: 900px;
+  width: 100%;
+  margin-top: 24px;
+  border-collapse: collapse;
+  background: white;
+}
+
+.signal-table th,
+.signal-table td {
+  border: 1px solid #d1d5db;
+  padding: 9px 12px;
+  text-align: left;
+}
+
+.signal-table th {
+  background: #f3f4f6;
+}
+
+.table-limit-message {
+  color: #475569;
+  font-size: 14px;
 }
 </style>

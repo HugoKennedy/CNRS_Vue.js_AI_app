@@ -55,12 +55,64 @@ def main():
     else:
         frequence_coupure_hz = 0
 
+    output_metadata = data.get("__thinkml_outputs", {})
+
     output = {
         **data,
         "__thinkml_label": "Condensateur RC",
-        "__thinkml_description": "Simule la charge et la decharge du condensateur. La sortie du filtre est la tension aux bornes du condensateur.",
+        "__thinkml_description": "Simule la tension aux bornes du condensateur, c est-a-dire la sortie du filtre RC.",
         "__thinkml_parameters": {
             "capacite_farads": capacite_farads,
+        },
+        "__thinkml_outputs": {
+            **output_metadata,
+            "capacite_farads": {
+                "label": "Capacite",
+                "unit": "F",
+            },
+            "tau_s": {
+                "label": "Constante de temps tau",
+                "unit": "s",
+            },
+            "frequence_coupure_hz": {
+                "label": "Frequence de coupure",
+                "unit": "Hz",
+            },
+            "signal_filtre": {
+                "label": "Signal filtre",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
+            "signal_sortie": {
+                "label": "Tension de sortie Vout",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
+            "tension_condensateur": {
+                "label": "Tension condensateur",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
+            "tension_resistance": {
+                "label": "Tension resistance",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
+            "courant_resistance": {
+                "label": "Courant resistance",
+                "unit": "A",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
         },
         "capacite_farads": capacite_farads,
         "tau_s": round(tau_s, 9),

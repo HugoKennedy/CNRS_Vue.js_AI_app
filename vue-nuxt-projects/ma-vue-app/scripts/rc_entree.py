@@ -5,6 +5,7 @@ import sys
 
 def main():
     payload = json.load(sys.stdin)
+    data = payload.get("data", {})
     parameters = payload.get("parameters", {})
 
     amplitude = float(parameters.get("amplitude", 1.0))
@@ -30,10 +31,12 @@ def main():
         time.append(round(t_ms, 4))
         signal.append(round(value, 6))
 
+    output_metadata = data.get("__thinkml_outputs", {})
+
     output = {
-        **payload.get("data", {}),
+        **data,
         "__thinkml_label": "Entree RC",
-        "__thinkml_description": "Genere un signal sinusoidal bruite pour tester un filtre RC passe-bas.",
+        "__thinkml_description": "Genere une tension d entree bruitee pour tester un filtre RC passe-bas.",
         "__thinkml_parameters": {
             "amplitude": amplitude,
             "duration_ms": duration_ms,
@@ -41,6 +44,23 @@ def main():
             "freq_signal_hz": freq_signal_hz,
             "freq_noise_hz": freq_noise_hz,
             "noise_amplitude": noise_amplitude,
+        },
+        "__thinkml_outputs": {
+            **output_metadata,
+            "signal": {
+                "label": "Signal d entree",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
+            "signal_entree": {
+                "label": "Tension d entree Vin",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
         },
         "time": time,
         "signal": signal,

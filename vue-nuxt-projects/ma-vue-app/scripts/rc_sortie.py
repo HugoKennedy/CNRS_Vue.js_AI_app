@@ -24,11 +24,41 @@ def main():
     else:
         gain_approx = 0
 
+    output_metadata = data.get("__thinkml_outputs", {})
+
     output = {
         **data,
         "__thinkml_label": "Sortie RC",
         "__thinkml_description": "Prepare les grandeurs finales du filtre RC pour affichage dans ThinkML.",
         "__thinkml_parameters": {},
+        "__thinkml_outputs": {
+            **output_metadata,
+            "gain_approx": {
+                "label": "Gain approximatif",
+                "unit": "",
+            },
+            "signal": {
+                "label": "Signal d entree",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
+            "signal_filtre": {
+                "label": "Signal filtre",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
+            "signal_sortie": {
+                "label": "Tension de sortie Vout",
+                "unit": "V",
+                "xKey": "time",
+                "xLabel": "Temps",
+                "xUnit": "ms",
+            },
+        },
         "signal": signal_entree,
         "signal_filtre": signal_sortie,
         "signal_sortie": signal_sortie,
