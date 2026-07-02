@@ -155,12 +155,7 @@ function validatePythonScriptContract(scriptPath, scriptFile) {
 
       isSettled = true
       pythonProcess.kill()
-
-      reject(
-        new Error(
-          `Le script ${scriptFile} ne repond pas assez vite au test JSON.`,
-        ),
-      )
+      reject(new Error(`Le script ${scriptFile} ne repond pas assez vite au test JSON.`))
     }, 4000)
 
     pythonProcess.stdout.on('data', (data) => {
@@ -195,11 +190,7 @@ function validatePythonScriptContract(scriptPath, scriptFile) {
       clearTimeout(timeout)
 
       if (code !== 0) {
-        reject(
-          new Error(
-            `Le script ${scriptFile} a echoue pendant le test JSON. Detail : ${stderr}`,
-          ),
-        )
+        reject(new Error(`Le script ${scriptFile} a echoue pendant le test JSON. Detail : ${stderr}`))
         return
       }
 
@@ -207,11 +198,7 @@ function validatePythonScriptContract(scriptPath, scriptFile) {
         const output = JSON.parse(stdout)
 
         if (!output || typeof output !== 'object' || Array.isArray(output)) {
-          reject(
-            new Error(
-              `Le script ${scriptFile} doit renvoyer un objet JSON, pas une liste ou une valeur simple.`,
-            ),
-          )
+          reject(new Error(`Le script ${scriptFile} doit renvoyer un objet JSON.`))
           return
         }
 
@@ -299,18 +286,57 @@ function normalizeDeclaredOutputs(declaredOutputs) {
     return []
   }
 
-  return Object.keys(declaredOutputs).filter(
-    (key) => !key.startsWith('__thinkml_'),
-  )
+  return Object.keys(declaredOutputs).filter((key) => !key.startsWith('__thinkml_'))
+}
+
+function normalizeParameterDeclaration(parameterDeclaration) {
+  const values = {}
+  const metadata = {}
+
+  if (
+    !parameterDeclaration ||
+    typeof parameterDeclaration !== 'object' ||
+    Array.isArray(parameterDeclaration)
+  ) {
+    return { values, metadata }
+  }
+
+  for (const [name, declaration] of Object.entries(parameterDeclaration)) {
+    if (
+      declaration &&
+      typeof declaration === 'object' &&
+      !Array.isArray(declaration) &&
+      Object.prototype.hasOwnProperty.call(declaration, 'value')
+    ) {
+      values[name] = declaration.value
+      metadata[name] = {
+        label: declaration.label || name,
+        unit: declaration.unit || '',
+        description: declaration.description || '',
+        type: declaration.type || typeof declaration.value,
+        min: declaration.min,
+        max: declaration.max,
+        step: declaration.step,
+      }
+    } else {
+      values[name] = declaration
+      metadata[name] = {
+        label: name,
+        unit: '',
+        description: '',
+        type: typeof declaration,
+      }
+    }
+  }
+
+  return { values, metadata }
 }
 
 function inferOutputs(output) {
   const ignoredKeys = ['time', 'frequencies']
   const probeKeys = Object.keys(probeData)
 
-  const visibleKeys = Object.keys(output).filter(
-    (key) => !key.startsWith('__thinkml_'),
-  )
+  const visibleKeys = Object.keys(output).filter((key) => !key.startsWith('__thinkml_'))
 
   const newKeys = visibleKeys.filter(
     (key) => !probeKeys.includes(key) && !ignoredKeys.includes(key),
@@ -332,10 +358,7 @@ function inferInputs(group, outputs) {
     return ['signal_fenetre']
   }
 
-  if (
-    outputs.includes('dominant_frequency_hz') ||
-    outputs.includes('dominant_amplitude')
-  ) {
+  if (outputs.includes('dominant_frequency_hz') || outputs.includes('dominant_amplitude')) {
     return ['spectre']
   }
 
@@ -343,23 +366,12 @@ function inferInputs(group, outputs) {
     return ['signal']
   }
 
-  if (
-    outputs.includes('signal_sortie') ||
-    outputs.includes('tension_condensateur')
-  ) {
+  if (outputs.includes('signal_sortie') || outputs.includes('tension_condensateur')) {
     return ['signal_apres_resistance']
   }
 
   if (outputs.includes('gain_approx')) {
     return ['signal_sortie']
-  }
-
-  if (group === 'FPGA JESD204B') {
-    if (outputs.includes('raw_data')) {
-      return []
-    }
-
-    return ['raw_data']
   }
 
   if (outputs.includes('classes') || outputs.includes('classification_score')) {
@@ -459,13 +471,9 @@ app.post('/api/scripts/import', async (req, res) => {
     const scripts = await readScripts()
     const scriptId = createScriptId(safeFileName, scripts)
 
-    const declaredInputs = normalizeDeclaredInputs(
-      validationOutput.__thinkml_inputs,
-    )
-
-    const declaredOutputs = normalizeDeclaredOutputs(
-      validationOutput.__thinkml_outputs,
-    )
+    const declaredInputs = normalizeDeclaredInputs(validationOutput.__thinkml_inputs)
+    const declaredOutputs = normalizeDeclaredOutputs(validationOutput.__thinkml_outputs)
+    const parameterInfo = normalizeParameterDeclaration(validationOutput.__thinkml_parameters)
 
     const outputs =
       declaredOutputs.length > 0 ? declaredOutputs : inferOutputs(validationOutput)
@@ -485,7 +493,8 @@ app.post('/api/scripts/import', async (req, res) => {
         'Script Python ajoute depuis l interface.',
       inputs,
       outputs,
-      parameters: validationOutput.__thinkml_parameters || {},
+      parameters: parameterInfo.values,
+      parameterMetadata: parameterInfo.metadata,
     }
 
     await rename(tempScriptPath, finalScriptPath)
@@ -500,6 +509,7 @@ app.post('/api/scripts/import', async (req, res) => {
       validation: {
         inputs,
         outputs,
+        parameters: parameterInfo.values,
       },
     })
   } catch (error) {

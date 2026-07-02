@@ -1,6 +1,7 @@
 import json
 import math
 import sys
+import time
 
 
 def main():
@@ -19,9 +20,9 @@ def main():
             coefficient = 0.5 - 0.5 * math.cos(
                 2 * math.pi * index / (sample_count - 1)
             )
-
+        
         signal_fenetre.append(round(value * coefficient, 6))
-
+    time.sleep(10)
     output_metadata = data.get("__thinkml_outputs", {})
 
     output = {

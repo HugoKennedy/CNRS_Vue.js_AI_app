@@ -37,7 +37,7 @@ const categoryOptions = computed(() => {
 })
 
 const isNewCategorySelected = computed(
-  () => selectedGroup.value === NEW_CATEGORY_VALUE
+  () => selectedGroup.value === NEW_CATEGORY_VALUE,
 )
 
 const importCategory = computed(() => {
@@ -169,6 +169,24 @@ function handleScriptDragStart({ event, script }) {
 
       <WorkflowCanvas :tabs="workflowStore.tabs" />
     </main>
+
+    <div
+      v-if="workflowStore.isRunning"
+      class="execution-status-bar"
+    >
+      <div class="execution-status-content">
+        <span class="execution-spinner" />
+
+        <span>
+          Execution du workflow en cours... ThinkML attend la reponse des scripts
+          Python.
+        </span>
+      </div>
+
+      <div class="execution-progress-track">
+        <div class="execution-progress-fill" />
+      </div>
+    </div>
 
     <div
       v-if="isImportModalOpen"
@@ -419,5 +437,71 @@ function handleScriptDragStart({ event, script }) {
 .primary-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.execution-status-bar {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 80;
+  overflow: hidden;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  background: #f0fdf4;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+}
+
+.execution-status-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  color: #14532d;
+  font-weight: 700;
+}
+
+.execution-spinner {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 3px solid #bbf7d0;
+  border-top-color: #16a34a;
+  border-radius: 999px;
+  animation: spin 0.75s linear infinite;
+}
+
+.execution-progress-track {
+  height: 6px;
+  overflow: hidden;
+  background: #dcfce7;
+}
+
+.execution-progress-fill {
+  width: 45%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22c55e, #16a34a, #15803d);
+  animation: progress-slide 1.25s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  50% {
+    transform: translateX(80%);
+  }
+
+  100% {
+    transform: translateX(240%);
+  }
 }
 </style>

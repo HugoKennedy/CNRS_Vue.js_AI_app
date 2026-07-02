@@ -20,14 +20,23 @@ function createInitialEdges() {
   return []
 }
 
-function parseParameterValue(value) {
+function parseParameterValue(value, metadata = {}) {
+  if (metadata.type === 'number') {
+    const numberValue = Number(value)
+    return Number.isNaN(numberValue) ? value : numberValue
+  }
+
+  if (metadata.type === 'boolean') {
+    return value === true || value === 'true'
+  }
+
   if (value === '') {
     return ''
   }
 
   const numberValue = Number(value)
 
-  if (!Number.isNaN(numberValue) && value.trim() !== '') {
+  if (!Number.isNaN(numberValue) && String(value).trim() !== '') {
     return numberValue
   }
 
@@ -50,6 +59,7 @@ function cleanNode(node) {
       inputs: node.data.inputs || [],
       outputs: node.data.outputs || [],
       parameters: node.data.parameters || {},
+      parameterMetadata: node.data.parameterMetadata || {},
     },
   }
 }
@@ -77,12 +87,7 @@ function decorateEdge(edge, isSelected = false) {
 
 export const useWorkflowStore = defineStore('workflow', {
   state: () => ({
-    actions: [
-      'Reinitialiser',
-      'Ajouter script',
-      'Sauvegarder',
-      'Executer',
-    ],
+    actions: ['Reinitialiser', 'Ajouter script', 'Sauvegarder', 'Executer'],
 
     scriptGroups: [],
     scripts: [],
@@ -125,7 +130,7 @@ export const useWorkflowStore = defineStore('workflow', {
       return Boolean(
         state.selectedNodeId ||
         state.selectedEdgeId ||
-        state.selectedScriptId
+        state.selectedScriptId,
       )
     },
   },
@@ -154,7 +159,7 @@ export const useWorkflowStore = defineStore('workflow', {
       this.selectedScriptId = ''
 
       this.edges = this.edges.map((edge) =>
-        decorateEdge(edge, edge.id === edgeId)
+        decorateEdge(edge, edge.id === edgeId),
       )
 
       this.nodes = this.nodes.map((node) => ({
@@ -199,13 +204,10 @@ export const useWorkflowStore = defineStore('workflow', {
       this.nodes = this.nodes.filter((node) => node.id !== nodeId)
 
       this.edges = this.edges.filter(
-        (edge) => edge.source !== nodeId && edge.target !== nodeId
+        (edge) => edge.source !== nodeId && edge.target !== nodeId,
       )
 
-      if (this.selectedNodeId === nodeId) {
-        this.selectedNodeId = ''
-      }
-
+      this.selectedNodeId = ''
       this.selectedEdgeId = ''
       this.selectedScriptId = ''
       this.executionResult = null
@@ -222,11 +224,7 @@ export const useWorkflowStore = defineStore('workflow', {
       }
 
       this.edges = this.edges.filter((edge) => edge.id !== edgeId)
-
-      if (this.selectedEdgeId === edgeId) {
-        this.selectedEdgeId = ''
-      }
-
+      this.selectedEdgeId = ''
       this.selectedNodeId = ''
       this.selectedScriptId = ''
       this.executionResult = null
@@ -246,7 +244,7 @@ export const useWorkflowStore = defineStore('workflow', {
       }
 
       const confirmed = window.confirm(
-        `Supprimer le script ${script.file} de la liste ?`
+        `Supprimer le script ${script.file} de la liste ?`,
       )
 
       if (!confirmed) {
@@ -262,7 +260,7 @@ export const useWorkflowStore = defineStore('workflow', {
 
         if (!response.ok) {
           throw new Error(
-            result?.details || result?.message || `Erreur HTTP ${response.status}`
+            result?.details || result?.message || `Erreur HTTP ${response.status}`,
           )
         }
 
@@ -277,7 +275,7 @@ export const useWorkflowStore = defineStore('workflow', {
         this.edges = this.edges.filter(
           (edge) =>
             !nodeIdsToRemove.includes(edge.source) &&
-            !nodeIdsToRemove.includes(edge.target)
+            !nodeIdsToRemove.includes(edge.target),
         )
 
         this.selectedScriptId = ''
@@ -321,10 +319,25 @@ export const useWorkflowStore = defineStore('workflow', {
         return
       }
 
-      node.data.parameters = {
-        ...node.data.parameters,
-        [parameterName]: parseParameterValue(parameterValue),
-      }
+      const metadata = node.data.parameterMetadata?.[parameterName] || {}
+      const parsedValue = parseParameterValue(parameterValue, metadata)
+
+      this.nodes = this.nodes.map((currentNode) => {
+        if (currentNode.id !== node.id) {
+          return currentNode
+        }
+
+        return {
+          ...currentNode,
+          data: {
+            ...currentNode.data,
+            parameters: {
+              ...currentNode.data.parameters,
+              [parameterName]: parsedValue,
+            },
+          },
+        }
+      })
     },
 
     async loadScripts() {
@@ -365,11 +378,6 @@ export const useWorkflowStore = defineStore('workflow', {
         return false
       }
 
-      if (!group || group.trim() === '') {
-        this.importScriptError = 'La categorie est obligatoire.'
-        return false
-      }
-
       try {
         const content = await file.text()
 
@@ -389,7 +397,7 @@ export const useWorkflowStore = defineStore('workflow', {
 
         if (!response.ok) {
           throw new Error(
-            result?.details || result?.message || `Erreur HTTP ${response.status}`
+            result?.details || result?.message || `Erreur HTTP ${response.status}`,
           )
         }
 
@@ -421,7 +429,8 @@ export const useWorkflowStore = defineStore('workflow', {
           description: script.description,
           inputs: script.inputs || [],
           outputs: script.outputs || [],
-          parameters: script.parameters || {},
+          parameters: { ...(script.parameters || {}) },
+          parameterMetadata: { ...(script.parameterMetadata || {}) },
         },
       }
 
@@ -459,7 +468,7 @@ export const useWorkflowStore = defineStore('workflow', {
           id: edgeId,
           animated: true,
         },
-        false
+        false,
       )
 
       this.edges.push(edge)
@@ -475,7 +484,6 @@ export const useWorkflowStore = defineStore('workflow', {
       }
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(workflowState))
-
       alert('Workflow sauvegarde')
     },
 
@@ -497,7 +505,7 @@ export const useWorkflowStore = defineStore('workflow', {
 
         this.nodes = workflowState.nodes || createInitialNodes()
         this.edges = (workflowState.edges || createInitialEdges()).map((edge) =>
-          decorateEdge(edge, edge.id === workflowState.selectedEdgeId)
+          decorateEdge(edge, edge.id === workflowState.selectedEdgeId),
         )
         this.nextNodeIndex = workflowState.nextNodeIndex || 0
         this.selectedNodeId = workflowState.selectedNodeId || ''
@@ -555,7 +563,7 @@ export const useWorkflowStore = defineStore('workflow', {
 
         if (!response.ok) {
           throw new Error(
-            result?.details || result?.message || `Erreur HTTP ${response.status}`
+            result?.details || result?.message || `Erreur HTTP ${response.status}`,
           )
         }
 

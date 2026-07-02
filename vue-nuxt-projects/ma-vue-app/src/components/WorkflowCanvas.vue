@@ -12,6 +12,9 @@ defineProps({
 
 const workflowStore = useWorkflowStore()
 const selectedOutputKey = ref('')
+const selectedComparisonKeys = ref([])
+
+const seriesColors = ['#2563eb', '#dc2626', '#059669', '#7c3aed', '#ea580c']
 
 const { screenToFlowCoordinate } = useVueFlow()
 
@@ -80,11 +83,7 @@ function formatValue(value) {
 }
 
 function formatUnit(unit) {
-  if (!unit) {
-    return ''
-  }
-
-  return ` ${unit}`
+  return unit ? ` ${unit}` : ''
 }
 
 function getOutputOptionLabel(output) {
@@ -95,14 +94,13 @@ function getOutputOptionLabel(output) {
 
   if (output.kind === 'courbe') {
     const xPart = xUnit ? `${xLabel} (${xUnit})` : xLabel
-    const yPart = unit ? `${unit}` : 'sans unite'
+    const yPart = unit || 'sans unite'
 
     return `${output.label} | ${output.size} points | ${yPart} en fonction de ${xPart}`
   }
 
   if (output.kind === 'valeur') {
     const value = Array.isArray(output.value) ? output.value[0] : output.value
-
     return `${output.label} = ${formatValue(value)}${formatUnit(unit)}`
   }
 
@@ -147,6 +145,17 @@ function handleKeyDown(event) {
   workflowStore.deleteSelectedElement()
 }
 
+function toggleComparisonKey(key, checked) {
+  if (checked) {
+    selectedComparisonKeys.value = [...new Set([...selectedComparisonKeys.value, key])]
+    return
+  }
+
+  selectedComparisonKeys.value = selectedComparisonKeys.value.filter(
+    (currentKey) => currentKey !== key,
+  )
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
 })
@@ -156,7 +165,6 @@ onBeforeUnmount(() => {
 })
 
 const rawOutputs = computed(() => workflowStore.executionResult?.simulatedOutputs || {})
-
 const outputMetadata = computed(() => rawOutputs.value.__thinkml_outputs || {})
 
 const availableOutputs = computed(() => {
@@ -244,34 +252,84 @@ const currentValues = computed(() => {
   return [value]
 })
 
-const currentXValues = computed(() => {
-  const metadata = currentMetadata.value
+function getXValuesForOutput(output) {
+  const metadata = output.metadata || {}
+  const value = Array.isArray(output.value) ? output.value : [output.value]
   const xKey = metadata.xKey
 
   if (
     xKey &&
     Array.isArray(rawOutputs.value[xKey]) &&
-    rawOutputs.value[xKey].length === currentValues.value.length
+    rawOutputs.value[xKey].length === value.length
   ) {
     return rawOutputs.value[xKey]
   }
 
   if (
-    currentOutputKey.value === 'spectre' &&
+    output.key === 'spectre' &&
     Array.isArray(rawOutputs.value.frequencies) &&
-    rawOutputs.value.frequencies.length === currentValues.value.length
+    rawOutputs.value.frequencies.length === value.length
   ) {
     return rawOutputs.value.frequencies
   }
 
   if (
     Array.isArray(rawOutputs.value.time) &&
-    rawOutputs.value.time.length === currentValues.value.length
+    rawOutputs.value.time.length === value.length
   ) {
     return rawOutputs.value.time
   }
 
-  return currentValues.value.map((_, index) => index)
+  return value.map((_, index) => index)
+}
+
+const currentXValues = computed(() => {
+  if (!currentOutput.value) {
+    return []
+  }
+
+  return getXValuesForOutput(currentOutput.value)
+})
+
+const comparisonCandidates = computed(() => {
+  if (!currentOutput.value || currentOutput.value.kind !== 'courbe') {
+    return []
+  }
+
+  return curveOutputs.value.filter((output) => {
+    if (output.key === currentOutputKey.value) {
+      return false
+    }
+
+    return output.value.length === currentValues.value.length
+  })
+})
+
+const selectedComparisonOutputs = computed(() =>
+  comparisonCandidates.value.filter((output) =>
+    selectedComparisonKeys.value.includes(output.key),
+  ),
+)
+
+const canDrawChart = computed(
+  () => isNumericArray(currentValues.value) && currentValues.value.length > 1,
+)
+
+const chartSeries = computed(() => {
+  if (!canDrawChart.value || !currentOutput.value) {
+    return []
+  }
+
+  const outputs = [currentOutput.value, ...selectedComparisonOutputs.value]
+
+  return outputs.map((output, index) => ({
+    key: output.key,
+    label: output.label,
+    unit: output.unit,
+    color: seriesColors[index % seriesColors.length],
+    xValues: getXValuesForOutput(output),
+    yValues: output.value,
+  }))
 })
 
 const chartConfig = {
@@ -284,13 +342,13 @@ const chartConfig = {
 }
 
 const chartBounds = computed(() => {
-  const xValues = currentXValues.value
-  const yValues = currentValues.value
+  const allXValues = chartSeries.value.flatMap((series) => series.xValues)
+  const allYValues = chartSeries.value.flatMap((series) => series.yValues)
 
-  const minX = Math.min(...xValues)
-  const maxX = Math.max(...xValues)
-  const minY = Math.min(...yValues)
-  const maxY = Math.max(...yValues)
+  const minX = Math.min(...allXValues)
+  const maxX = Math.max(...allXValues)
+  const minY = Math.min(...allYValues)
+  const maxY = Math.max(...allYValues)
 
   const yPadding = (maxY - minY || 1) * 0.08
 
@@ -323,23 +381,17 @@ function getChartY(yValue) {
   )
 }
 
-const canDrawChart = computed(
-  () => isNumericArray(currentValues.value) && currentValues.value.length > 1,
-)
-
-const chartPoints = computed(() => {
-  if (!canDrawChart.value) {
-    return []
-  }
-
-  return currentValues.value.map((yValue, index) => ({
-    x: getChartX(currentXValues.value[index]),
-    y: getChartY(yValue),
-  }))
-})
-
-const signalPoints = computed(() =>
-  chartPoints.value.map((point) => `${point.x},${point.y}`).join(' '),
+const renderedSeries = computed(() =>
+  chartSeries.value.map((series) => ({
+    ...series,
+    points: series.yValues
+      .map((yValue, index) => `${getChartX(series.xValues[index])},${getChartY(yValue)}`)
+      .join(' '),
+    circles: series.yValues.map((yValue, index) => ({
+      x: getChartX(series.xValues[index]),
+      y: getChartY(yValue),
+    })),
+  })),
 )
 
 function buildTicks(minValue, maxValue, count = 5) {
@@ -430,10 +482,31 @@ const tableRows = computed(() =>
   })),
 )
 
-const selectedNodeParameters = computed(() => {
-  const parameters = workflowStore.selectedNode?.data.parameters || {}
+const selectedNodeParameterRows = computed(() => {
+  const node = workflowStore.selectedNode
 
-  return Object.entries(parameters)
+  if (!node) {
+    return []
+  }
+
+  const parameters = node.data.parameters || {}
+  const parameterMetadata = node.data.parameterMetadata || {}
+
+  return Object.entries(parameters).map(([key, value]) => {
+    const metadata = parameterMetadata[key] || {}
+
+    return {
+      key,
+      value,
+      label: metadata.label || key,
+      unit: metadata.unit || '',
+      description: metadata.description || '',
+      type: metadata.type || (typeof value === 'number' ? 'number' : 'text'),
+      min: metadata.min,
+      max: metadata.max,
+      step: metadata.step || (typeof value === 'number' ? 'any' : undefined),
+    }
+  })
 })
 </script>
 
@@ -532,7 +605,7 @@ const selectedNodeParameters = computed(() => {
 
       <div v-else>
         <div class="signal-toolbar">
-          <label for="signal-output-select">Sortie a afficher</label>
+          <label for="signal-output-select">Sortie principale</label>
 
           <select
             id="signal-output-select"
@@ -579,6 +652,26 @@ const selectedNodeParameters = computed(() => {
               </option>
             </optgroup>
           </select>
+        </div>
+
+        <div
+          v-if="comparisonCandidates.length > 0"
+          class="comparison-panel"
+        >
+          <strong>Comparer avec :</strong>
+
+          <label
+            v-for="output in comparisonCandidates"
+            :key="output.key"
+            class="comparison-option"
+          >
+            <input
+              type="checkbox"
+              :checked="selectedComparisonKeys.includes(output.key)"
+              @change="toggleComparisonKey(output.key, $event.target.checked)"
+            />
+            {{ output.label }}
+          </label>
         </div>
 
         <div class="signal-card">
@@ -672,19 +765,26 @@ const selectedNodeParameters = computed(() => {
               </text>
             </g>
 
-            <polyline
-              :points="signalPoints"
-              class="signal-line"
-            />
+            <g
+              v-for="series in renderedSeries"
+              :key="series.key"
+            >
+              <polyline
+                :points="series.points"
+                class="signal-line"
+                :style="{ stroke: series.color }"
+              />
 
-            <circle
-              v-for="(point, index) in chartPoints"
-              :key="index"
-              :cx="point.x"
-              :cy="point.y"
-              r="3"
-              class="signal-point"
-            />
+              <circle
+                v-for="(point, index) in series.circles"
+                :key="`${series.key}-${index}`"
+                :cx="point.x"
+                :cy="point.y"
+                r="2.6"
+                class="signal-point"
+                :style="{ fill: series.color }"
+              />
+            </g>
 
             <text
               :x="chartConfig.width / 2"
@@ -706,8 +806,25 @@ const selectedNodeParameters = computed(() => {
             </text>
           </svg>
 
+          <div
+            v-if="renderedSeries.length > 1"
+            class="chart-legend"
+          >
+            <span
+              v-for="series in renderedSeries"
+              :key="series.key"
+              class="legend-item"
+            >
+              <span
+                class="legend-color"
+                :style="{ background: series.color }"
+              />
+              {{ series.label }}
+            </span>
+          </div>
+
           <p
-            v-else
+            v-if="!isScalarOutput && !canDrawChart"
             class="no-chart-message"
           >
             Cette sortie n est pas une liste numerique. Elle est affichee dans le
@@ -855,39 +972,43 @@ const selectedNodeParameters = computed(() => {
         <div class="parameters-section">
           <h4>Parametres modifiables</h4>
 
-          <table
-            v-if="selectedNodeParameters.length > 0"
-            class="parameters-table"
+          <div
+            v-if="selectedNodeParameterRows.length > 0"
+            class="parameter-list"
           >
-            <thead>
-              <tr>
-                <th>Nom</th>
-                <th>Valeur</th>
-              </tr>
-            </thead>
+            <label
+              v-for="parameter in selectedNodeParameterRows"
+              :key="parameter.key"
+              class="parameter-field"
+            >
+              <span class="parameter-label">
+                {{ parameter.label }}
+                <small v-if="parameter.unit">({{ parameter.unit }})</small>
+              </span>
 
-            <tbody>
-              <tr
-                v-for="[key, value] in selectedNodeParameters"
-                :key="key"
+              <input
+                class="parameter-input"
+                :type="parameter.type === 'number' ? 'number' : 'text'"
+                :value="parameter.value"
+                :min="parameter.min"
+                :max="parameter.max"
+                :step="parameter.step"
+                @input="
+                  workflowStore.updateSelectedNodeParameter(
+                    parameter.key,
+                    $event.target.value
+                  )
+                "
+              />
+
+              <span
+                v-if="parameter.description"
+                class="parameter-description"
               >
-                <td>{{ key }}</td>
-
-                <td>
-                  <input
-                    class="parameter-input"
-                    :value="value"
-                    @input="
-                      workflowStore.updateSelectedNodeParameter(
-                        key,
-                        $event.target.value
-                      )
-                    "
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                {{ parameter.description }}
+              </span>
+            </label>
+          </div>
 
           <p v-else>Aucun parametre.</p>
         </div>
@@ -917,7 +1038,7 @@ const selectedNodeParameters = computed(() => {
 }
 
 .signal-toolbar {
-  max-width: 860px;
+  max-width: 900px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -935,6 +1056,26 @@ const selectedNodeParameters = computed(() => {
   border: 1px solid #cbd5e1;
   border-radius: 5px;
   background: white;
+}
+
+.comparison-panel {
+  max-width: 900px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.comparison-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
 }
 
 .signal-card {
@@ -1013,12 +1154,31 @@ const selectedNodeParameters = computed(() => {
 
 .signal-line {
   fill: none;
-  stroke: #2563eb;
   stroke-width: 3;
 }
 
 .signal-point {
-  fill: #1d4ed8;
+  opacity: 0.9;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
 }
 
 .no-chart-message {
@@ -1052,5 +1212,60 @@ const selectedNodeParameters = computed(() => {
 .table-limit-message {
   color: #475569;
   font-size: 14px;
+}
+
+.parameters-card {
+  max-width: 900px;
+  padding: 18px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.parameters-card h3 {
+  margin-top: 0;
+}
+
+.parameters-section {
+  margin-top: 18px;
+}
+
+.parameter-list {
+  display: grid;
+  gap: 14px;
+}
+
+.parameter-field {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(180px, 1fr);
+  gap: 8px 14px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: white;
+}
+
+.parameter-label {
+  font-weight: 700;
+}
+
+.parameter-label small {
+  color: #475569;
+  font-weight: 400;
+}
+
+.parameter-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  font: inherit;
+}
+
+.parameter-description {
+  grid-column: 1 / -1;
+  color: #475569;
+  font-size: 13px;
 }
 </style>
