@@ -1,128 +1,77 @@
 [
   {
-    "id": "acquisition",
-    "file": "acquisition.py",
-    "label": "Acquisition APD",
-    "group": "Detection APD",
-    "description": "Genere un signal temporel APD simule.",
-    "inputs": [],
-    "outputs": [
-      "signal"
-    ],
-    "parameters": {
-      "duration_ns": 1000,
-      "sampling_ns": 1,
-      "amplitude": 1
-    }
-  },
-  {
-    "id": "filtre",
-    "file": "filtre.py",
-    "label": "Filtre passe-bas",
-    "group": "Detection APD",
-    "description": "Filtre un signal bruité pour reduire le bruit haute frequence.",
+    "id": "rc_entree",
+    "file": "rc_entree.py",
+    "label": "Entree RC",
+    "group": "RCpb",
+    "description": "Genere un signal sinusoidal bruite pour tester un filtre RC passe-bas.",
     "inputs": [
       "signal"
     ],
     "outputs": [
-      "signal_filtre"
+      "signal_entree"
     ],
     "parameters": {
-      "cutoff_mhz": 25
+      "amplitude": 1,
+      "duration_ms": 100,
+      "sampling_ms": 1,
+      "freq_signal_hz": 20,
+      "freq_noise_hz": 250,
+      "noise_amplitude": 0.35
     }
   },
   {
-    "id": "fft",
-    "file": "fft.py",
-    "label": "Transformee FFT",
-    "group": "Detection APD",
-    "description": "Transforme un signal temporel en spectre frequentiel.",
+    "id": "rc_resistance",
+    "file": "rc_resistance.py",
+    "label": "Resistance RC",
+    "group": "RCpb",
+    "description": "Definit la resistance R du filtre RC passe-bas.",
     "inputs": [
       "signal"
     ],
     "outputs": [
-      "spectre"
+      "resistance_ohm",
+      "signal_apres_resistance"
     ],
     "parameters": {
-      "window": "hann"
+      "resistance_ohm": 1000
     }
   },
   {
-    "id": "deconvolution",
-    "file": "deconvolution.py",
-    "label": "Deconvolution Tikhonov",
-    "group": "Detection APD",
-    "description": "Applique une deconvolution analytique fictive pour reconstruire le signal.",
+    "id": "rc_sortie",
+    "file": "rc_sortie.py",
+    "label": "Sortie RC",
+    "group": "RCpb",
+    "description": "Prepare les grandeurs finales du filtre RC pour affichage dans ThinkML.",
     "inputs": [
-      "signal"
+      "signal_apres_resistance"
     ],
     "outputs": [
-      "signal_deconvolue"
+      "signal_sortie",
+      "gain_approx"
     ],
-    "parameters": {
-      "lambda": 0.01
-    }
+    "parameters": {}
   },
   {
-    "id": "cnn",
-    "file": "cnn.py",
-    "label": "Classification CNN",
-    "group": "Detection APD",
-    "description": "Classe un spectre ou un signal avec un modele CNN fictif.",
+    "id": "rc_condensateur",
+    "file": "rc_condensateur.py",
+    "label": "Condensateur RC",
+    "group": "RCpb",
+    "description": "Simule la charge et la decharge du condensateur. La sortie du filtre est la tension aux bornes du condensateur.",
     "inputs": [
-      "spectre"
+      "signal_apres_resistance"
     ],
     "outputs": [
-      "classes"
+      "capacite_farads",
+      "tau_s",
+      "frequence_coupure_hz",
+      "signal_sortie",
+      "tension_condensateur",
+      "tension_resistance",
+      "courant_resistance"
     ],
     "parameters": {
-      "model": "mock_cnn_apd.onnx"
-    }
-  },
-  {
-    "id": "anomaly",
-    "file": "anomaly.py",
-    "label": "Detection anomalie",
-    "group": "Detection APD",
-    "description": "Detecte des signaux anormaux avec un autoencoder fictif.",
-    "inputs": [
-      "signal"
-    ],
-    "outputs": [
-      "anomaly_score"
-    ],
-    "parameters": {
-      "threshold": 0.8
-    }
-  },
-  {
-    "id": "capture",
-    "file": "capture.py",
-    "label": "Capture FPGA",
-    "group": "FPGA JESD204B",
-    "description": "Simule la capture de donnees brutes depuis une chaine FPGA.",
-    "inputs": [],
-    "outputs": [
-      "raw_data"
-    ],
-    "parameters": {
-      "channel": 1
-    }
-  },
-  {
-    "id": "analyse",
-    "file": "analyse.py",
-    "label": "Analyse FPGA",
-    "group": "FPGA JESD204B",
-    "description": "Analyse des donnees brutes issues de la capture FPGA.",
-    "inputs": [
-      "raw_data"
-    ],
-    "outputs": [
-      "analysis"
-    ],
-    "parameters": {
-      "mode": "quick"
+      "capacite_farads": 0.000001
     }
   }
 ]

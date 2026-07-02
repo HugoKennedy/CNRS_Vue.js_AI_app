@@ -1,11 +1,5 @@
 import express from 'express'
-import {
-  access,
-  readFile,
-  rename,
-  unlink,
-  writeFile,
-} from 'node:fs/promises'
+import { access, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, parse } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
@@ -124,7 +118,12 @@ function runPythonScript(scriptFile, payload) {
       }
 
       try {
-        resolve(JSON.parse(stdout))
+        const output = JSON.parse(stdout)
+        delete output.__thinkml_parameters
+        delete output.__thinkml_description
+        delete output.__thinkml_label
+
+        resolve(output)
       } catch (error) {
         reject(
           new Error(
@@ -273,7 +272,11 @@ function inferOutputs(output) {
   const ignoredKeys = ['time', 'frequencies']
   const probeKeys = Object.keys(probeData)
 
-  const newKeys = Object.keys(output).filter(
+  const visibleKeys = Object.keys(output).filter(
+    (key) => !key.startsWith('__thinkml_'),
+  )
+
+  const newKeys = visibleKeys.filter(
     (key) => !probeKeys.includes(key) && !ignoredKeys.includes(key),
   )
 
@@ -281,10 +284,25 @@ function inferOutputs(output) {
     return newKeys
   }
 
-  return Object.keys(output).filter((key) => !ignoredKeys.includes(key))
+  return visibleKeys.filter((key) => !ignoredKeys.includes(key))
 }
 
 function inferInputs(group, outputs) {
+  if (outputs.includes('signal_apres_resistance')) {
+    return ['signal']
+  }
+
+  if (
+    outputs.includes('signal_sortie') ||
+    outputs.includes('tension_condensateur')
+  ) {
+    return ['signal_apres_resistance']
+  }
+
+  if (outputs.includes('gain_approx')) {
+    return ['signal_sortie']
+  }
+
   if (group === 'FPGA JESD204B') {
     if (outputs.includes('raw_data')) {
       return []
@@ -313,35 +331,17 @@ function inferInputs(group, outputs) {
     return ['signal']
   }
 
-  return ['signal']
+  return []
 }
 
 function normalizeGroup(group) {
-  const trimmedGroup = String(group || '').trim().replace(/\s+/g, ' ')
+  const cleanedGroup = String(group || '').trim()
 
-  if (trimmedGroup === 'apd' || trimmedGroup === 'Detection APD') {
-    return 'Detection APD'
+  if (!cleanedGroup) {
+    throw new Error('La categorie est vide.')
   }
 
-  if (trimmedGroup === 'fpga' || trimmedGroup === 'FPGA JESD204B') {
-    return 'FPGA JESD204B'
-  }
-
-  if (trimmedGroup.length < 2) {
-    throw new Error('Le nom de la categorie est trop court.')
-  }
-
-  if (trimmedGroup.length > 40) {
-    throw new Error('Le nom de la categorie est trop long.')
-  }
-
-  if (!/^[a-zA-Z0-9 _-]+$/.test(trimmedGroup)) {
-    throw new Error(
-      'Le nom de la categorie ne doit contenir que lettres, chiffres, espaces, tirets ou underscores.',
-    )
-  }
-
-  return trimmedGroup
+  return cleanedGroup
 }
 
 app.get('/api/health', (req, res) => {
@@ -417,12 +417,14 @@ app.post('/api/scripts/import', async (req, res) => {
     const newScript = {
       id: scriptId,
       file: safeFileName,
-      label: parse(safeFileName).name,
+      label: validationOutput.__thinkml_label || parse(safeFileName).name,
       group: normalizedGroup,
-      description: 'Script Python ajoute depuis l interface.',
+      description:
+        validationOutput.__thinkml_description ||
+        'Script Python ajoute depuis l interface.',
       inputs,
       outputs,
-      parameters: {},
+      parameters: validationOutput.__thinkml_parameters || {},
     }
 
     await rename(tempScriptPath, finalScriptPath)
@@ -435,7 +437,9 @@ app.post('/api/scripts/import', async (req, res) => {
       message: `Script ${safeFileName} ajoute avec succes.`,
       script: newScript,
       validation: {
-        outputKeys: Object.keys(validationOutput),
+        outputKeys: Object.keys(validationOutput).filter(
+          (key) => !key.startsWith('__thinkml_'),
+        ),
       },
     })
   } catch (error) {
@@ -465,7 +469,6 @@ app.delete('/api/scripts/:scriptId', async (req, res) => {
     }
 
     const scriptPath = join(scriptsDirectory, scriptToDelete.file)
-    const updatedScripts = scripts.filter((script) => script.id !== scriptId)
 
     await unlink(scriptPath).catch((error) => {
       if (error.code !== 'ENOENT') {
@@ -473,6 +476,7 @@ app.delete('/api/scripts/:scriptId', async (req, res) => {
       }
     })
 
+    const updatedScripts = scripts.filter((script) => script.id !== scriptId)
     await writeScripts(updatedScripts)
 
     res.json({
@@ -529,7 +533,7 @@ app.post('/api/run', async (req, res) => {
 
     res.json({
       status: 'ok',
-      message: 'Workflow execute avec scripts Python fictifs',
+      message: 'Workflow execute avec scripts Python',
       nodeCount: nodes.length,
       edgeCount: edges.length,
       executionOrder,
@@ -547,5 +551,5 @@ app.post('/api/run', async (req, res) => {
 })
 
 app.listen(port, () => {
-  console.log(`Scientific Workflow API running at http://localhost:${port}`)
+  console.log(`ThinkML API running at http://localhost:${port}`)
 })

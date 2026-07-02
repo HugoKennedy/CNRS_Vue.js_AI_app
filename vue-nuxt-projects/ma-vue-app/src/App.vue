@@ -11,29 +11,24 @@ const NEW_CATEGORY_VALUE = '__new_category__'
 
 const isImportModalOpen = ref(false)
 const selectedFile = ref(null)
-const selectedGroup = ref('')
+const selectedGroup = ref(NEW_CATEGORY_VALUE)
 const newCategoryName = ref('')
 const isImporting = ref(false)
-
-const defaultCategories = ['Detection APD', 'FPGA JESD204B']
 
 workflowStore.loadWorkflow()
 
 onMounted(async () => {
   await workflowStore.loadScripts()
-
-  if (!selectedGroup.value) {
-    selectedGroup.value = categoryOptions.value[0] || 'Detection APD'
-  }
+  resetSelectedCategory()
 })
 
 const selectedFileName = computed(() => selectedFile.value?.name || '')
 
 const categoryOptions = computed(() => {
-  const categories = new Set(defaultCategories)
+  const categories = new Set()
 
   for (const group of workflowStore.scriptGroups) {
-    if (group.title) {
+    if (group.title && group.scripts && group.scripts.length > 0) {
       categories.add(group.title)
     }
   }
@@ -53,25 +48,29 @@ const importCategory = computed(() => {
   return selectedGroup.value
 })
 
-function openImportModal() {
+function resetSelectedCategory() {
+  if (categoryOptions.value.length === 0) {
+    selectedGroup.value = NEW_CATEGORY_VALUE
+    return
+  }
+
+  if (
+    !selectedGroup.value ||
+    selectedGroup.value === NEW_CATEGORY_VALUE ||
+    !categoryOptions.value.includes(selectedGroup.value)
+  ) {
+    selectedGroup.value = categoryOptions.value[0]
+  }
+}
+
+async function openImportModal() {
   selectedFile.value = null
   newCategoryName.value = ''
   workflowStore.importScriptStatus = ''
   workflowStore.importScriptError = ''
 
-  workflowStore.loadScripts().then(() => {
-    if (
-      !selectedGroup.value ||
-      selectedGroup.value === NEW_CATEGORY_VALUE ||
-      !categoryOptions.value.includes(selectedGroup.value)
-    ) {
-      selectedGroup.value = categoryOptions.value[0] || 'Detection APD'
-    }
-  })
-
-  if (!selectedGroup.value) {
-    selectedGroup.value = categoryOptions.value[0] || 'Detection APD'
-  }
+  await workflowStore.loadScripts()
+  resetSelectedCategory()
 
   isImportModalOpen.value = true
 }
@@ -113,10 +112,7 @@ async function submitScriptImport() {
     newCategoryName.value = ''
 
     await workflowStore.loadScripts()
-
-    if (!categoryOptions.value.includes(selectedGroup.value)) {
-      selectedGroup.value = categoryOptions.value[0] || 'Detection APD'
-    }
+    resetSelectedCategory()
 
     isImportModalOpen.value = false
   }
@@ -242,13 +238,14 @@ function handleScriptDragStart({ event, script }) {
               v-model="newCategoryName"
               type="text"
               class="category-input"
-              placeholder="Ex : Test perso"
+              placeholder="Ex : Filtre RC"
             />
           </label>
 
           <p class="modal-help">
-            Le script sera ajoute dans la categorie selectionnee. Si tu choisis
-            nouvelle categorie, elle sera creee automatiquement avec ce script.
+            Les categories affichees viennent uniquement des scripts deja
+            presents dans ThinkML. Si aucun script n existe, tu dois creer une
+            nouvelle categorie avec ton premier script.
           </p>
 
           <p class="modal-help secondary-help">
