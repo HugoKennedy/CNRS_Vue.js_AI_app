@@ -4,6 +4,10 @@ defineProps({
     type: Array,
     required: true,
   },
+  selectedScriptId: {
+    type: String,
+    default: '',
+  },
   isLoading: {
     type: Boolean,
     default: false,
@@ -14,7 +18,7 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['script-click'])
+const emit = defineEmits(['script-select', 'script-drag-start'])
 </script>
 
 <template>
@@ -47,8 +51,11 @@ const emit = defineEmits(['script-click'])
           v-for="script in group.scripts"
           :key="script.id"
           class="script"
-          :title="script.description"
-          @click="emit('script-click', script)"
+          :class="{ selected: script.id === selectedScriptId }"
+          :title="`${script.description} | Glisser vers le diagramme pour creer un bloc`"
+          draggable="true"
+          @click="emit('script-select', script)"
+          @dragstart="emit('script-drag-start', { event: $event, script })"
         >
           {{ script.file }}
         </button>
@@ -56,3 +63,21 @@ const emit = defineEmits(['script-click'])
     </template>
   </aside>
 </template>
+
+<style scoped>
+.script {
+  cursor: grab;
+}
+
+.script:active {
+  cursor: grabbing;
+}
+
+.script.selected {
+  background: #fee2e2;
+  border-color: #ef4444;
+  border-left-color: #dc2626;
+  color: #7f1d1d;
+  font-weight: 700;
+}
+</style>

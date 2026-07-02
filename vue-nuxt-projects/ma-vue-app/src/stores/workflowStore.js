@@ -2,6 +2,16 @@ import { defineStore } from 'pinia'
 
 const STORAGE_KEY = 'scientific-workflow-state-empty-start'
 
+const DEFAULT_EDGE_STYLE = {
+  stroke: '#6b7280',
+  strokeWidth: 2,
+}
+
+const SELECTED_EDGE_STYLE = {
+  stroke: '#f59e0b',
+  strokeWidth: 4,
+}
+
 function createInitialNodes() {
   return []
 }
@@ -51,8 +61,17 @@ function cleanEdge(edge) {
     target: edge.target,
     sourceHandle: edge.sourceHandle,
     targetHandle: edge.targetHandle,
-    animated: edge.animated || true,
+    animated: edge.animated ?? true,
     selected: edge.selected || false,
+  }
+}
+
+function decorateEdge(edge, isSelected = false) {
+  return {
+    ...edge,
+    animated: edge.animated ?? true,
+    selected: isSelected,
+    style: isSelected ? { ...SELECTED_EDGE_STYLE } : { ...DEFAULT_EDGE_STYLE },
   }
 }
 
@@ -76,6 +95,7 @@ export const useWorkflowStore = defineStore('workflow', {
 
     selectedNodeId: '',
     selectedEdgeId: '',
+    selectedScriptId: '',
 
     isRunning: false,
     executionResult: null,
@@ -92,8 +112,16 @@ export const useWorkflowStore = defineStore('workflow', {
       return state.edges.find((edge) => edge.id === state.selectedEdgeId) || null
     },
 
+    selectedScript(state) {
+      return state.scripts.find((script) => script.id === state.selectedScriptId) || null
+    },
+
     hasSelection(state) {
-      return Boolean(state.selectedNodeId || state.selectedEdgeId)
+      return Boolean(
+        state.selectedNodeId ||
+        state.selectedEdgeId ||
+        state.selectedScriptId
+      )
     },
   },
 
@@ -105,26 +133,24 @@ export const useWorkflowStore = defineStore('workflow', {
     selectNode(nodeId) {
       this.selectedNodeId = nodeId
       this.selectedEdgeId = ''
+      this.selectedScriptId = ''
 
       this.nodes = this.nodes.map((node) => ({
         ...node,
         selected: node.id === nodeId,
       }))
 
-      this.edges = this.edges.map((edge) => ({
-        ...edge,
-        selected: false,
-      }))
+      this.edges = this.edges.map((edge) => decorateEdge(edge, false))
     },
 
     selectEdge(edgeId) {
       this.selectedEdgeId = edgeId
       this.selectedNodeId = ''
+      this.selectedScriptId = ''
 
-      this.edges = this.edges.map((edge) => ({
-        ...edge,
-        selected: edge.id === edgeId,
-      }))
+      this.edges = this.edges.map((edge) =>
+        decorateEdge(edge, edge.id === edgeId)
+      )
 
       this.nodes = this.nodes.map((node) => ({
         ...node,
@@ -132,7 +158,8 @@ export const useWorkflowStore = defineStore('workflow', {
       }))
     },
 
-    clearSelection() {
+    selectScript(scriptId) {
+      this.selectedScriptId = scriptId
       this.selectedNodeId = ''
       this.selectedEdgeId = ''
 
@@ -141,10 +168,20 @@ export const useWorkflowStore = defineStore('workflow', {
         selected: false,
       }))
 
-      this.edges = this.edges.map((edge) => ({
-        ...edge,
+      this.edges = this.edges.map((edge) => decorateEdge(edge, false))
+    },
+
+    clearSelection() {
+      this.selectedNodeId = ''
+      this.selectedEdgeId = ''
+      this.selectedScriptId = ''
+
+      this.nodes = this.nodes.map((node) => ({
+        ...node,
         selected: false,
       }))
+
+      this.edges = this.edges.map((edge) => decorateEdge(edge, false))
     },
 
     deleteNode(nodeId) {
@@ -157,7 +194,7 @@ export const useWorkflowStore = defineStore('workflow', {
       this.nodes = this.nodes.filter((node) => node.id !== nodeId)
 
       this.edges = this.edges.filter(
-        (edge) => edge.source !== nodeId && edge.target !== nodeId,
+        (edge) => edge.source !== nodeId && edge.target !== nodeId
       )
 
       if (this.selectedNodeId === nodeId) {
@@ -165,6 +202,7 @@ export const useWorkflowStore = defineStore('workflow', {
       }
 
       this.selectedEdgeId = ''
+      this.selectedScriptId = ''
       this.executionResult = null
       this.executionError = ''
       this.executionLogs = [
@@ -184,9 +222,75 @@ export const useWorkflowStore = defineStore('workflow', {
         this.selectedEdgeId = ''
       }
 
+      this.selectedNodeId = ''
+      this.selectedScriptId = ''
       this.executionResult = null
       this.executionError = ''
       this.executionLogs = [`Liaison supprimee : ${edgeId}`]
+    },
+
+    async deleteScript(scriptId) {
+      if (!scriptId) {
+        return
+      }
+
+      const script = this.scripts.find((item) => item.id === scriptId)
+
+      if (!script) {
+        return
+      }
+
+      const confirmed = window.confirm(
+        `Supprimer le script ${script.file} de la liste ?`
+      )
+
+      if (!confirmed) {
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/scripts/${scriptId}`, {
+          method: 'DELETE',
+        })
+
+        const result = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(
+            result?.details || result?.message || `Erreur HTTP ${response.status}`
+          )
+        }
+
+        const deletedFile = script.file
+
+        const nodeIdsToRemove = this.nodes
+          .filter((node) => node.data.file === deletedFile)
+          .map((node) => node.id)
+
+        this.nodes = this.nodes.filter((node) => node.data.file !== deletedFile)
+
+        this.edges = this.edges.filter(
+          (edge) =>
+            !nodeIdsToRemove.includes(edge.source) &&
+            !nodeIdsToRemove.includes(edge.target)
+        )
+
+        this.selectedScriptId = ''
+        this.selectedNodeId = ''
+        this.selectedEdgeId = ''
+        this.executionResult = null
+        this.executionError = ''
+        this.executionLogs = [
+          result?.message || `Script supprime : ${deletedFile}`,
+          'Les blocs utilisant ce script ont aussi ete retires du diagramme.',
+        ]
+
+        await this.loadScripts()
+      } catch (error) {
+        this.executionError = error.message
+        this.executionLogs = [`Erreur pendant la suppression : ${error.message}`]
+        this.activeTab = 'Logs'
+      }
     },
 
     deleteSelectedElement() {
@@ -197,6 +301,11 @@ export const useWorkflowStore = defineStore('workflow', {
 
       if (this.selectedEdgeId) {
         this.deleteEdge(this.selectedEdgeId)
+        return
+      }
+
+      if (this.selectedScriptId) {
+        this.deleteScript(this.selectedScriptId)
       }
     },
 
@@ -270,7 +379,7 @@ export const useWorkflowStore = defineStore('workflow', {
 
         if (!response.ok) {
           throw new Error(
-            result?.details || result?.message || `Erreur HTTP ${response.status}`,
+            result?.details || result?.message || `Erreur HTTP ${response.status}`
           )
         }
 
@@ -284,14 +393,14 @@ export const useWorkflowStore = defineStore('workflow', {
       }
     },
 
-    addScriptNode(script) {
+    addScriptNode(script, position = null) {
       const nodeId = `${script.id}-${Date.now()}`
       const offset = this.nextNodeIndex * 35
 
       const node = {
         id: nodeId,
         type: 'scriptNode',
-        position: {
+        position: position || {
           x: 120 + offset,
           y: 100 + offset,
         },
@@ -311,27 +420,37 @@ export const useWorkflowStore = defineStore('workflow', {
         selected: false,
       }))
 
-      this.edges = this.edges.map((edge) => ({
-        ...edge,
-        selected: false,
-      }))
+      this.edges = this.edges.map((edge) => decorateEdge(edge, false))
 
       this.nodes.push(node)
       this.selectedNodeId = nodeId
       this.selectedEdgeId = ''
+      this.selectedScriptId = ''
       this.activeTab = 'Diagramme'
       this.nextNodeIndex += 1
+    },
+
+    addScriptNodeFromLibrary(scriptId, position = null) {
+      const script = this.scripts.find((item) => item.id === scriptId)
+
+      if (!script) {
+        return
+      }
+
+      this.addScriptNode(script, position)
     },
 
     addConnection(connection) {
       const edgeId = `${connection.source}-to-${connection.target}-${Date.now()}`
 
-      const edge = {
-        ...connection,
-        id: edgeId,
-        animated: true,
-        selected: false,
-      }
+      const edge = decorateEdge(
+        {
+          ...connection,
+          id: edgeId,
+          animated: true,
+        },
+        false
+      )
 
       this.edges.push(edge)
     },
@@ -359,6 +478,7 @@ export const useWorkflowStore = defineStore('workflow', {
         this.nextNodeIndex = 0
         this.selectedNodeId = ''
         this.selectedEdgeId = ''
+        this.selectedScriptId = ''
         return
       }
 
@@ -366,10 +486,13 @@ export const useWorkflowStore = defineStore('workflow', {
         const workflowState = JSON.parse(savedState)
 
         this.nodes = workflowState.nodes || createInitialNodes()
-        this.edges = workflowState.edges || createInitialEdges()
+        this.edges = (workflowState.edges || createInitialEdges()).map((edge) =>
+          decorateEdge(edge, edge.id === workflowState.selectedEdgeId)
+        )
         this.nextNodeIndex = workflowState.nextNodeIndex || 0
         this.selectedNodeId = workflowState.selectedNodeId || ''
         this.selectedEdgeId = workflowState.selectedEdgeId || ''
+        this.selectedScriptId = ''
       } catch (error) {
         console.error('Erreur pendant le chargement du workflow', error)
         localStorage.removeItem(STORAGE_KEY)
@@ -379,6 +502,7 @@ export const useWorkflowStore = defineStore('workflow', {
         this.nextNodeIndex = 0
         this.selectedNodeId = ''
         this.selectedEdgeId = ''
+        this.selectedScriptId = ''
       }
     },
 
@@ -388,6 +512,7 @@ export const useWorkflowStore = defineStore('workflow', {
       this.nextNodeIndex = 0
       this.selectedNodeId = ''
       this.selectedEdgeId = ''
+      this.selectedScriptId = ''
       this.executionResult = null
       this.executionError = ''
       this.executionLogs = ['Aucune execution lancee pour le moment.']
@@ -420,7 +545,7 @@ export const useWorkflowStore = defineStore('workflow', {
 
         if (!response.ok) {
           throw new Error(
-            result?.details || result?.message || `Erreur HTTP ${response.status}`,
+            result?.details || result?.message || `Erreur HTTP ${response.status}`
           )
         }
 

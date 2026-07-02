@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Handle, Position, VueFlow } from '@vue-flow/core'
+import { Handle, Position, VueFlow, useVueFlow } from '@vue-flow/core'
 import { useWorkflowStore } from '../stores/workflowStore'
 
 defineProps({
@@ -12,6 +12,30 @@ defineProps({
 
 const workflowStore = useWorkflowStore()
 const selectedOutputKey = ref('')
+
+const { screenToFlowCoordinate } = useVueFlow()
+
+function handleDragOver(event) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'copy'
+}
+
+function handleScriptDrop(event) {
+  event.preventDefault()
+
+  const scriptId = event.dataTransfer?.getData('application/x-script-id')
+
+  if (!scriptId) {
+    return
+  }
+
+  const position = screenToFlowCoordinate({
+    x: event.clientX,
+    y: event.clientY,
+  })
+
+  workflowStore.addScriptNodeFromLibrary(scriptId, position)
+}
 
 function isNumericArray(values) {
   return (
@@ -94,7 +118,7 @@ const availableOutputs = computed(() => {
 
 const currentOutputKey = computed(() => {
   const selectedOutputExists = availableOutputs.value.some(
-    (output) => output.key === selectedOutputKey.value,
+    (output) => output.key === selectedOutputKey.value
   )
 
   if (selectedOutputExists) {
@@ -105,7 +129,7 @@ const currentOutputKey = computed(() => {
 })
 
 const currentOutput = computed(() =>
-  availableOutputs.value.find((output) => output.key === currentOutputKey.value),
+  availableOutputs.value.find((output) => output.key === currentOutputKey.value)
 )
 
 const currentValues = computed(() => {
@@ -219,11 +243,11 @@ const tableRows = computed(() =>
     index,
     x: currentXValues.value[index],
     value: formatValue(value),
-  })),
+  }))
 )
 
 const xColumnLabel = computed(() =>
-  currentOutputKey.value === 'spectre' ? 'Frequence' : 'Temps / index',
+  currentOutputKey.value === 'spectre' ? 'Frequence' : 'Temps / index'
 )
 
 const canDrawChart = computed(() => chartPoints.value.length > 0)
@@ -270,6 +294,8 @@ const selectedNodeParameters = computed(() => {
         @node-click="workflowStore.selectNode($event.node.id)"
         @edge-click="workflowStore.selectEdge($event.edge.id)"
         @pane-click="workflowStore.clearSelection"
+        @dragover="handleDragOver"
+        @drop="handleScriptDrop"
       >
         <template #node-scriptNode="{ id, data }">
           <div
@@ -618,28 +644,5 @@ const selectedNodeParameters = computed(() => {
   border: 1px solid #cbd5e1;
   border-radius: 5px;
   background: white;
-  font: inherit;
-}
-
-.signal-meta {
-  margin: 0 0 12px;
-  color: #4b5563;
-  font-size: 14px;
-}
-
-.no-chart-message {
-  max-width: 700px;
-  margin: 0;
-  padding: 14px;
-  border: 1px solid #fde68a;
-  border-radius: 6px;
-  background: #fffbeb;
-  color: #92400e;
-}
-
-.table-limit-message {
-  max-width: 700px;
-  color: #4b5563;
-  font-size: 14px;
 }
 </style>

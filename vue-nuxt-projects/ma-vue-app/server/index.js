@@ -32,7 +32,6 @@ app.use(express.json({ limit: '2mb' }))
 
 async function readScripts() {
   const scriptsContent = await readFile(scriptsJsonPath, 'utf8')
-
   return JSON.parse(scriptsContent)
 }
 
@@ -436,6 +435,44 @@ app.post('/api/scripts/import', async (req, res) => {
   }
 })
 
+app.delete('/api/scripts/:scriptId', async (req, res) => {
+  try {
+    const { scriptId } = req.params
+    const scripts = await readScripts()
+    const scriptToDelete = scripts.find((script) => script.id === scriptId)
+
+    if (!scriptToDelete) {
+      return res.status(404).json({
+        status: 'error',
+        message: `Script introuvable : ${scriptId}`,
+      })
+    }
+
+    const updatedScripts = scripts.filter((script) => script.id !== scriptId)
+    const scriptPath = join(scriptsDirectory, scriptToDelete.file)
+
+    await unlink(scriptPath).catch((error) => {
+      if (error.code !== 'ENOENT') {
+        throw error
+      }
+    })
+
+    await writeScripts(updatedScripts)
+
+    res.json({
+      status: 'ok',
+      message: `Script ${scriptToDelete.file} supprime.`,
+      script: scriptToDelete,
+    })
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Impossible de supprimer le script.',
+      details: error.message,
+    })
+  }
+})
+
 app.post('/api/run', async (req, res) => {
   const { nodes = [], edges = [] } = req.body
 
@@ -476,7 +513,7 @@ app.post('/api/run', async (req, res) => {
 
     res.json({
       status: 'ok',
-      message: 'Workflow execute avec scripts Python fictifs',
+      message: 'Workflow execute avec scripts Python',
       nodeCount: nodes.length,
       edgeCount: edges.length,
       executionOrder,

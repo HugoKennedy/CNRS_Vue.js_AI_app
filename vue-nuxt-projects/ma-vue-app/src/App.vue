@@ -76,15 +76,23 @@ function handleActionClick(action) {
   }
 }
 
-function handleScriptClick(script) {
-  workflowStore.addScriptNode(script)
+function handleScriptSelect(script) {
+  workflowStore.selectScript(script.id)
+}
+
+function handleScriptDragStart({ event, script }) {
+  workflowStore.selectScript(script.id)
+
+  event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer.setData('application/x-script-id', script.id)
+  event.dataTransfer.setData('text/plain', script.file)
 }
 </script>
 
 <template>
   <div class="app-shell">
     <TopBar
-      title="Scientific Workflow Studio"
+      title="ThinkML"
       :actions="workflowStore.actions"
       @action-click="handleActionClick"
     />
@@ -92,9 +100,11 @@ function handleScriptClick(script) {
     <main class="workspace">
       <Sidebar
         :script-groups="workflowStore.scriptGroups"
+        :selected-script-id="workflowStore.selectedScriptId"
         :is-loading="workflowStore.isLoadingScripts"
         :error-message="workflowStore.scriptsError"
-        @script-click="handleScriptClick"
+        @script-select="handleScriptSelect"
+        @script-drag-start="handleScriptDragStart"
       />
 
       <WorkflowCanvas :tabs="workflowStore.tabs" />
