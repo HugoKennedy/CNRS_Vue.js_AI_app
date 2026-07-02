@@ -317,15 +317,31 @@ function inferInputs(group, outputs) {
 }
 
 function normalizeGroup(group) {
-  if (group === 'apd' || group === 'Detection APD') {
+  const trimmedGroup = String(group || '').trim().replace(/\s+/g, ' ')
+
+  if (trimmedGroup === 'apd' || trimmedGroup === 'Detection APD') {
     return 'Detection APD'
   }
 
-  if (group === 'fpga' || group === 'FPGA JESD204B') {
+  if (trimmedGroup === 'fpga' || trimmedGroup === 'FPGA JESD204B') {
     return 'FPGA JESD204B'
   }
 
-  throw new Error('Categorie inconnue. Choisir Detection APD ou FPGA JESD204B.')
+  if (trimmedGroup.length < 2) {
+    throw new Error('Le nom de la categorie est trop court.')
+  }
+
+  if (trimmedGroup.length > 40) {
+    throw new Error('Le nom de la categorie est trop long.')
+  }
+
+  if (!/^[a-zA-Z0-9 _-]+$/.test(trimmedGroup)) {
+    throw new Error(
+      'Le nom de la categorie ne doit contenir que lettres, chiffres, espaces, tirets ou underscores.',
+    )
+  }
+
+  return trimmedGroup
 }
 
 app.get('/api/health', (req, res) => {
@@ -444,12 +460,12 @@ app.delete('/api/scripts/:scriptId', async (req, res) => {
     if (!scriptToDelete) {
       return res.status(404).json({
         status: 'error',
-        message: `Script introuvable : ${scriptId}`,
+        message: 'Script introuvable.',
       })
     }
 
-    const updatedScripts = scripts.filter((script) => script.id !== scriptId)
     const scriptPath = join(scriptsDirectory, scriptToDelete.file)
+    const updatedScripts = scripts.filter((script) => script.id !== scriptId)
 
     await unlink(scriptPath).catch((error) => {
       if (error.code !== 'ENOENT') {
@@ -513,7 +529,7 @@ app.post('/api/run', async (req, res) => {
 
     res.json({
       status: 'ok',
-      message: 'Workflow execute avec scripts Python',
+      message: 'Workflow execute avec scripts Python fictifs',
       nodeCount: nodes.length,
       edgeCount: edges.length,
       executionOrder,

@@ -7,24 +7,72 @@ import { useWorkflowStore } from './stores/workflowStore'
 
 const workflowStore = useWorkflowStore()
 
+const NEW_CATEGORY_VALUE = '__new_category__'
+
 const isImportModalOpen = ref(false)
 const selectedFile = ref(null)
-const selectedGroup = ref('Detection APD')
+const selectedGroup = ref('')
+const newCategoryName = ref('')
 const isImporting = ref(false)
+
+const defaultCategories = ['Detection APD', 'FPGA JESD204B']
 
 workflowStore.loadWorkflow()
 
-onMounted(() => {
-  workflowStore.loadScripts()
+onMounted(async () => {
+  await workflowStore.loadScripts()
+
+  if (!selectedGroup.value) {
+    selectedGroup.value = categoryOptions.value[0] || 'Detection APD'
+  }
 })
 
 const selectedFileName = computed(() => selectedFile.value?.name || '')
 
+const categoryOptions = computed(() => {
+  const categories = new Set(defaultCategories)
+
+  for (const group of workflowStore.scriptGroups) {
+    if (group.title) {
+      categories.add(group.title)
+    }
+  }
+
+  return Array.from(categories)
+})
+
+const isNewCategorySelected = computed(
+  () => selectedGroup.value === NEW_CATEGORY_VALUE
+)
+
+const importCategory = computed(() => {
+  if (isNewCategorySelected.value) {
+    return newCategoryName.value.trim()
+  }
+
+  return selectedGroup.value
+})
+
 function openImportModal() {
   selectedFile.value = null
-  selectedGroup.value = 'Detection APD'
+  newCategoryName.value = ''
   workflowStore.importScriptStatus = ''
   workflowStore.importScriptError = ''
+
+  workflowStore.loadScripts().then(() => {
+    if (
+      !selectedGroup.value ||
+      selectedGroup.value === NEW_CATEGORY_VALUE ||
+      !categoryOptions.value.includes(selectedGroup.value)
+    ) {
+      selectedGroup.value = categoryOptions.value[0] || 'Detection APD'
+    }
+  })
+
+  if (!selectedGroup.value) {
+    selectedGroup.value = categoryOptions.value[0] || 'Detection APD'
+  }
+
   isImportModalOpen.value = true
 }
 
@@ -43,17 +91,33 @@ function handleFileChange(event) {
 }
 
 async function submitScriptImport() {
+  workflowStore.importScriptStatus = ''
+  workflowStore.importScriptError = ''
+
+  if (isNewCategorySelected.value && !newCategoryName.value.trim()) {
+    workflowStore.importScriptError = 'Le nom de la nouvelle categorie est vide.'
+    return
+  }
+
   isImporting.value = true
 
   const success = await workflowStore.importPythonScript({
     file: selectedFile.value,
-    group: selectedGroup.value,
+    group: importCategory.value,
   })
 
   isImporting.value = false
 
   if (success) {
     selectedFile.value = null
+    newCategoryName.value = ''
+
+    await workflowStore.loadScripts()
+
+    if (!categoryOptions.value.includes(selectedGroup.value)) {
+      selectedGroup.value = categoryOptions.value[0] || 'Detection APD'
+    }
+
     isImportModalOpen.value = false
   }
 }
@@ -131,6 +195,7 @@ function handleScriptDragStart({ event, script }) {
         <div class="import-form">
           <label class="form-label">
             Fichier Python
+
             <input
               type="file"
               accept=".py"
@@ -148,16 +213,45 @@ function handleScriptDragStart({ event, script }) {
 
           <label class="form-label">
             Categorie
+
             <select
               v-model="selectedGroup"
               class="category-select"
             >
-              <option value="Detection APD">Detection APD</option>
-              <option value="FPGA JESD204B">FPGA JESD204B</option>
+              <option
+                v-for="category in categoryOptions"
+                :key="category"
+                :value="category"
+              >
+                {{ category }}
+              </option>
+
+              <option :value="NEW_CATEGORY_VALUE">
+                Nouvelle categorie
+              </option>
             </select>
           </label>
 
+          <label
+            v-if="isNewCategorySelected"
+            class="form-label"
+          >
+            Nom de la nouvelle categorie
+
+            <input
+              v-model="newCategoryName"
+              type="text"
+              class="category-input"
+              placeholder="Ex : Test perso"
+            />
+          </label>
+
           <p class="modal-help">
+            Le script sera ajoute dans la categorie selectionnee. Si tu choisis
+            nouvelle categorie, elle sera creee automatiquement avec ce script.
+          </p>
+
+          <p class="modal-help secondary-help">
             Le script doit lire un JSON depuis stdin et renvoyer un JSON avec
             print(json.dumps(...)).
           </p>
@@ -212,7 +306,7 @@ function handleScriptDragStart({ event, script }) {
 }
 
 .import-modal {
-  width: 440px;
+  width: 480px;
   max-width: calc(100vw - 32px);
   border-radius: 8px;
   background: white;
@@ -250,7 +344,8 @@ function handleScriptDragStart({ event, script }) {
 }
 
 .file-input,
-.category-select {
+.category-select,
+.category-input {
   width: 100%;
   margin-top: 8px;
   padding: 8px 10px;
@@ -273,6 +368,10 @@ function handleScriptDragStart({ event, script }) {
   background: #eff6ff;
   color: #1f2937;
   font-size: 14px;
+}
+
+.secondary-help {
+  margin-top: 10px;
 }
 
 .import-error {
@@ -309,6 +408,10 @@ function handleScriptDragStart({ event, script }) {
 .secondary-button {
   background: #f3f4f6;
   color: #111827;
+}
+
+.secondary-button:hover {
+  background: #e5e7eb;
 }
 
 .primary-button {

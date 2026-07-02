@@ -77,7 +77,12 @@ function decorateEdge(edge, isSelected = false) {
 
 export const useWorkflowStore = defineStore('workflow', {
   state: () => ({
-    actions: ['Reinitialiser', 'Ajouter script', 'Sauvegarder', 'Executer'],
+    actions: [
+      'Reinitialiser',
+      'Ajouter script',
+      'Sauvegarder',
+      'Executer',
+    ],
 
     scriptGroups: [],
     scripts: [],
@@ -357,6 +362,11 @@ export const useWorkflowStore = defineStore('workflow', {
 
       if (!file.name.toLowerCase().endsWith('.py')) {
         this.importScriptError = 'Le fichier doit etre un script Python .py.'
+        return false
+      }
+
+      if (!group || group.trim() === '') {
+        this.importScriptError = 'La categorie est obligatoire.'
         return false
       }
 
