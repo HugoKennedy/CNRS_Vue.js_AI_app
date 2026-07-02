@@ -119,9 +119,11 @@ function runPythonScript(scriptFile, payload) {
 
       try {
         const output = JSON.parse(stdout)
-        delete output.__thinkml_parameters
-        delete output.__thinkml_description
+
         delete output.__thinkml_label
+        delete output.__thinkml_description
+        delete output.__thinkml_parameters
+        delete output.__thinkml_inputs
 
         resolve(output)
       } catch (error) {
@@ -268,6 +270,40 @@ function createScriptId(fileName, existingScripts) {
   return candidateId
 }
 
+function normalizeDeclaredInputs(declaredInputs) {
+  if (!Array.isArray(declaredInputs)) {
+    return []
+  }
+
+  return declaredInputs
+    .map((input) => {
+      if (typeof input === 'string') {
+        return input
+      }
+
+      if (input && typeof input === 'object') {
+        return input.key
+      }
+
+      return ''
+    })
+    .filter(Boolean)
+}
+
+function normalizeDeclaredOutputs(declaredOutputs) {
+  if (
+    !declaredOutputs ||
+    typeof declaredOutputs !== 'object' ||
+    Array.isArray(declaredOutputs)
+  ) {
+    return []
+  }
+
+  return Object.keys(declaredOutputs).filter(
+    (key) => !key.startsWith('__thinkml_'),
+  )
+}
+
 function inferOutputs(output) {
   const ignoredKeys = ['time', 'frequencies']
   const probeKeys = Object.keys(probeData)
@@ -288,6 +324,21 @@ function inferOutputs(output) {
 }
 
 function inferInputs(group, outputs) {
+  if (outputs.includes('signal_fenetre')) {
+    return ['signal']
+  }
+
+  if (outputs.includes('spectre')) {
+    return ['signal_fenetre']
+  }
+
+  if (
+    outputs.includes('dominant_frequency_hz') ||
+    outputs.includes('dominant_amplitude')
+  ) {
+    return ['spectre']
+  }
+
   if (outputs.includes('signal_apres_resistance')) {
     return ['signal']
   }
@@ -309,10 +360,6 @@ function inferInputs(group, outputs) {
     }
 
     return ['raw_data']
-  }
-
-  if (outputs.includes('spectre')) {
-    return ['signal']
   }
 
   if (outputs.includes('classes') || outputs.includes('classification_score')) {
@@ -347,7 +394,7 @@ function normalizeGroup(group) {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'scientific-workflow-api',
+    service: 'thinkml-api',
     timestamp: new Date().toISOString(),
   })
 })
@@ -411,8 +458,22 @@ app.post('/api/scripts/import', async (req, res) => {
 
     const scripts = await readScripts()
     const scriptId = createScriptId(safeFileName, scripts)
-    const outputs = inferOutputs(validationOutput)
-    const inputs = inferInputs(normalizedGroup, outputs)
+
+    const declaredInputs = normalizeDeclaredInputs(
+      validationOutput.__thinkml_inputs,
+    )
+
+    const declaredOutputs = normalizeDeclaredOutputs(
+      validationOutput.__thinkml_outputs,
+    )
+
+    const outputs =
+      declaredOutputs.length > 0 ? declaredOutputs : inferOutputs(validationOutput)
+
+    const inputs =
+      declaredInputs.length > 0
+        ? declaredInputs
+        : inferInputs(normalizedGroup, outputs)
 
     const newScript = {
       id: scriptId,
@@ -437,9 +498,8 @@ app.post('/api/scripts/import', async (req, res) => {
       message: `Script ${safeFileName} ajoute avec succes.`,
       script: newScript,
       validation: {
-        outputKeys: Object.keys(validationOutput).filter(
-          (key) => !key.startsWith('__thinkml_'),
-        ),
+        inputs,
+        outputs,
       },
     })
   } catch (error) {

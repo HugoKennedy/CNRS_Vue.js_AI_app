@@ -73,5 +73,71 @@
       "gain_approx"
     ],
     "parameters": {}
+  },
+  {
+    "id": "spectre_entree",
+    "file": "spectre_entree.py",
+    "label": "Entree spectrale",
+    "group": "2freq",
+    "description": "Genere un signal compose de deux sinusoides.",
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "signal",
+      "sampling_hz"
+    ],
+    "parameters": {
+      "duration_s": 1,
+      "sampling_hz": 200,
+      "amplitude_1": 1,
+      "frequency_1_hz": 10,
+      "amplitude_2": 0.5,
+      "frequency_2_hz": 35
+    }
+  },
+  {
+    "id": "spectre_fenetre",
+    "file": "spectre_fenetre.py",
+    "label": "Fenetrage",
+    "group": "2freq",
+    "description": "Applique une fenetre de Hann avant le calcul du spectre.",
+    "inputs": [
+      "signal"
+    ],
+    "outputs": [
+      "signal_fenetre"
+    ],
+    "parameters": {}
+  },
+  {
+    "id": "spectre_fft",
+    "file": "spectre_fft.py",
+    "label": "Spectre",
+    "group": "2freq",
+    "description": "Calcule un spectre simple par transformee de Fourier discrete.",
+    "inputs": [
+      "signal_fenetre"
+    ],
+    "outputs": [
+      "spectre"
+    ],
+    "parameters": {}
+  },
+  {
+    "id": "spectre_pic",
+    "file": "spectre_pic.py",
+    "label": "Pic spectral",
+    "group": "2freq",
+    "description": "Detecte la frequence dominante dans le spectre.",
+    "inputs": [
+      "spectre",
+      "frequencies"
+    ],
+    "outputs": [
+      "dominant_frequency_hz",
+      "dominant_amplitude"
+    ],
+    "parameters": {}
   }
 ]
