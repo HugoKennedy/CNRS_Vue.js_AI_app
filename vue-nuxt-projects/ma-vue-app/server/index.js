@@ -563,6 +563,56 @@ app.delete('/api/scripts/:scriptId', async (req, res) => {
   }
 })
 
+app.delete('/api/script-groups', async (req, res) => {
+  try {
+    const groupTitle = String(req.body?.group || '').trim()
+
+    if (!groupTitle) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Le nom de la categorie est obligatoire.',
+      })
+    }
+
+    const scripts = await readScripts()
+    const scriptsToDelete = scripts.filter((script) => script.group === groupTitle)
+
+    if (scriptsToDelete.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Categorie introuvable ou deja vide.',
+      })
+    }
+
+    for (const script of scriptsToDelete) {
+      const scriptPath = join(scriptsDirectory, script.file)
+
+      await unlink(scriptPath).catch((error) => {
+        if (error.code !== 'ENOENT') {
+          throw error
+        }
+      })
+    }
+
+    const updatedScripts = scripts.filter((script) => script.group !== groupTitle)
+    await writeScripts(updatedScripts)
+
+    res.json({
+      status: 'ok',
+      message: `Categorie ${groupTitle} supprimee.`,
+      group: groupTitle,
+      deletedCount: scriptsToDelete.length,
+      deletedScripts: scriptsToDelete,
+    })
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Impossible de supprimer la categorie.',
+      details: error.message,
+    })
+  }
+})
+
 app.post('/api/run', async (req, res) => {
   const { nodes = [], edges = [] } = req.body
 

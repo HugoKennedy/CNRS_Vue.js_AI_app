@@ -85,6 +85,20 @@ function decorateEdge(edge, isSelected = false) {
   }
 }
 
+function buildWorkflowState(workflow) {
+  return {
+    nodes: workflow.nodes.map(cleanNode),
+    edges: workflow.edges.map(cleanEdge),
+    nextNodeIndex: workflow.nextNodeIndex,
+    selectedNodeId: workflow.selectedNodeId,
+    selectedEdgeId: workflow.selectedEdgeId,
+  }
+}
+
+function persistWorkflowState(workflow) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(buildWorkflowState(workflow)))
+}
+
 export const useWorkflowStore = defineStore('workflow', {
   state: () => ({
     actions: ['Reinitialiser', 'Ajouter script', 'Sauvegarder', 'Executer'],
@@ -288,10 +302,99 @@ export const useWorkflowStore = defineStore('workflow', {
           'Les blocs utilisant ce script ont aussi ete retires du diagramme.',
         ]
 
+        persistWorkflowState(this)
+
         await this.loadScripts()
       } catch (error) {
         this.executionError = error.message
         this.executionLogs = [`Erreur pendant la suppression : ${error.message}`]
+        this.activeTab = 'Logs'
+      }
+    },
+
+    async deleteScriptGroup(groupTitle) {
+      if (!groupTitle) {
+        return
+      }
+
+      const group = this.scriptGroups.find((item) => item.title === groupTitle)
+      const groupScripts = group?.scripts || []
+
+      if (groupScripts.length === 0) {
+        return
+      }
+
+      const confirmed = window.confirm(
+        `Supprimer la categorie ${groupTitle} et ses ${groupScripts.length} script(s) ?`,
+      )
+
+      if (!confirmed) {
+        return
+      }
+
+      try {
+        const response = await fetch('/api/script-groups', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            group: groupTitle,
+          }),
+        })
+
+        const result = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(
+            result?.details || result?.message || `Erreur HTTP ${response.status}`,
+          )
+        }
+
+        const deletedFiles = new Set(
+          (result?.deletedScripts || groupScripts).map((script) => script.file),
+        )
+        const deletedIds = new Set(
+          (result?.deletedScripts || groupScripts).map((script) => script.id),
+        )
+
+        const nodeIdsToRemove = this.nodes
+          .filter((node) => deletedFiles.has(node.data.file))
+          .map((node) => node.id)
+
+        this.nodes = this.nodes.filter((node) => !deletedFiles.has(node.data.file))
+
+        this.edges = this.edges.filter(
+          (edge) =>
+            !nodeIdsToRemove.includes(edge.source) &&
+            !nodeIdsToRemove.includes(edge.target),
+        )
+
+        if (deletedIds.has(this.selectedScriptId)) {
+          this.selectedScriptId = ''
+        }
+
+        if (nodeIdsToRemove.includes(this.selectedNodeId)) {
+          this.selectedNodeId = ''
+        }
+
+        this.selectedEdgeId = ''
+        this.executionResult = null
+        this.executionError = ''
+        this.executionLogs = [
+          result?.message || `Categorie supprimee : ${groupTitle}`,
+          `${result?.deletedCount || groupScripts.length} script(s) supprime(s).`,
+          'Les blocs utilisant ces scripts ont aussi ete retires du diagramme.',
+        ]
+
+        persistWorkflowState(this)
+
+        await this.loadScripts()
+      } catch (error) {
+        this.executionError = error.message
+        this.executionLogs = [
+          `Erreur pendant la suppression de la categorie : ${error.message}`,
+        ]
         this.activeTab = 'Logs'
       }
     },
@@ -475,15 +578,7 @@ export const useWorkflowStore = defineStore('workflow', {
     },
 
     saveWorkflow() {
-      const workflowState = {
-        nodes: this.nodes.map(cleanNode),
-        edges: this.edges.map(cleanEdge),
-        nextNodeIndex: this.nextNodeIndex,
-        selectedNodeId: this.selectedNodeId,
-        selectedEdgeId: this.selectedEdgeId,
-      }
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(workflowState))
+      persistWorkflowState(this)
       alert('Workflow sauvegarde')
     },
 

@@ -147,12 +147,16 @@ function handleScriptDragStart({ event, script }) {
   event.dataTransfer.setData('application/x-script-id', script.id)
   event.dataTransfer.setData('text/plain', script.file)
 }
+
+function handleGroupDelete(groupTitle) {
+  workflowStore.deleteScriptGroup(groupTitle)
+}
 </script>
 
 <template>
   <div class="app-shell">
     <TopBar
-      title="ThinkML"
+      title="SID4SIM"
       :actions="workflowStore.actions"
       @action-click="handleActionClick"
     />
@@ -165,6 +169,7 @@ function handleScriptDragStart({ event, script }) {
         :error-message="workflowStore.scriptsError"
         @script-select="handleScriptSelect"
         @script-drag-start="handleScriptDragStart"
+        @group-delete="handleGroupDelete"
       />
 
       <WorkflowCanvas :tabs="workflowStore.tabs" />
@@ -178,8 +183,7 @@ function handleScriptDragStart({ event, script }) {
         <span class="execution-spinner" />
 
         <span>
-          Execution du workflow en cours... ThinkML attend la reponse des scripts
-          Python.
+          Execution en cours
         </span>
       </div>
 
